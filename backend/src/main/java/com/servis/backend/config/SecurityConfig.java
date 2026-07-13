@@ -28,6 +28,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll() // Giriş/kayıt herkese açık
                         .requestMatchers("/h2-console/**").permitAll() // H2 konsolu için (geçici)
+                        .requestMatchers(
+                                "/api/customers/**",
+                                "/api/devices/**",
+                                "/api/warranty/**"
+                        ).permitAll()
                         .anyRequest().authenticated() // Diğer her şey token ister
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Session kullanma
