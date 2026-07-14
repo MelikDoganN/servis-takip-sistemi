@@ -3,7 +3,6 @@ package com.servis.backend.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -16,11 +15,10 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret}")
-    private String secret;
-
-    @Value("${jwt.expiration}")
-    private Long expiration;
+    // Sabit Secret (32 byte – örnek)
+    private static final String SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+    // 24 saat (milisaniye)
+    private static final long EXPIRATION = 86400000L;
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -62,13 +60,13 @@ public class JwtService {
                 .claims(claims)
                 .subject(username)
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .expiration(new Date(System.currentTimeMillis() + EXPIRATION))
                 .signWith(getSignKey())
                 .compact();
     }
 
     private SecretKey getSignKey() {
-        byte[] keyBytes = java.util.Base64.getDecoder().decode(secret);
+        byte[] keyBytes = java.util.Base64.getDecoder().decode(SECRET);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
