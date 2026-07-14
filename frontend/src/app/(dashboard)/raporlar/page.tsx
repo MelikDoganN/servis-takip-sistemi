@@ -1,18 +1,36 @@
+"use client";
+
 import { PageHeader } from "@/components/layout/PageHeader";
-import { PendingIntegration } from "@/components/ui/PendingIntegration";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { BarChart3 } from "lucide-react";
 
 export default function RaporlarPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 sm:space-y-8">
       <PageHeader
         title="Raporlar"
-        description="KPI ve performans raporları"
+        description="Operasyonel performans ve servis analizleri"
+        icon={<BarChart3 className="h-5 w-5" />}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled title="Henüz desteklenmiyor">
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" disabled title="Henüz desteklenmiyor">
+              Excel
+            </Button>
+          </div>
+        }
       />
 
-      <PendingIntegration
-        title="Rapor Entegrasyonu Bekleniyor"
-        description="Backend'de rapor endpoint'i henüz mevcut değil. Kişi 1 rapor API'lerini ekledikten sonra bu sayfa bağlanacak."
-      />
+      <SectionCard title="Rapor Paneli">
+        <EmptyState
+          title="Modül henüz aktif değil"
+          description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+        />
+      </SectionCard>
     </div>
   );
 }

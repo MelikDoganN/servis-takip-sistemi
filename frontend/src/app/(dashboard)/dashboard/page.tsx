@@ -1,59 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  LayoutDashboard,
+  Users,
+  MonitorSmartphone,
+  ShieldCheck,
+  ClipboardList,
+  ArrowRight,
+  AlertTriangle,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent } from "@/components/ui/Card";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { ChartPlaceholder } from "@/components/ui/ChartPlaceholder";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SkeletonCard, SkeletonList } from "@/components/ui/Skeleton";
 import { dashboardService } from "@/services/dashboardService";
 import { DashboardStats } from "@/types/dashboard";
 import { ApiError } from "@/types/api";
 
-const statConfig = [
-  {
-    key: "totalCustomers" as const,
-    label: "Toplam Müşteri",
-    pending: false,
-    icon: (
-      <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-    bgColor: "bg-blue-50",
-  },
-  {
-    key: "totalDevices" as const,
-    label: "Toplam Cihaz",
-    pending: false,
-    icon: (
-      <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-      </svg>
-    ),
-    bgColor: "bg-green-50",
-  },
-  {
-    key: "openWorkOrders" as const,
-    label: "Açık İş Emri",
-    pending: true,
-    icon: (
-      <svg className="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-      </svg>
-    ),
-    bgColor: "bg-orange-50",
-  },
-  {
-    key: "waitingParts" as const,
-    label: "Bekleyen Parça",
-    pending: true,
-    icon: (
-      <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-    bgColor: "bg-purple-50",
-  },
+const quickLinks = [
+  { href: "/musteriler", label: "Müşteriler", icon: Users },
+  { href: "/cihazlar", label: "Cihazlar", icon: MonitorSmartphone },
+  { href: "/garanti-sorgulama", label: "Garanti", icon: ShieldCheck },
+  { href: "/is-emirleri", label: "İş Emirleri", icon: ClipboardList },
 ];
 
 export default function DashboardPage() {
@@ -81,45 +54,98 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <LoadingSpinner size="lg" />
+      <div className="space-y-6 sm:space-y-8">
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-48" />
+          <div className="skeleton h-4 w-72" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <SkeletonList />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 sm:space-y-8">
       <PageHeader
         title="Dashboard"
-        description="Sistem özet bilgileri ve KPI kartları"
+        description="Operasyonel özet ve performans göstergeleri"
+        icon={<LayoutDashboard className="h-5 w-5" />}
       />
 
       {error && <ErrorMessage message={error} />}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {statConfig.map((stat) => {
-          const value = stats?.[stat.key];
-          const displayValue = stat.pending
-            ? "—"
-            : value ?? 0;
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+        <KpiCard
+          label="Toplam Müşteri"
+          value={stats?.totalCustomers ?? 0}
+          description="Kayıtlı müşteri sayısı"
+          iconBg="bg-primary-50 text-primary-600"
+          icon={<Users className="h-6 w-6" />}
+        />
+        <KpiCard
+          label="Toplam Cihaz"
+          value={stats?.totalDevices ?? 0}
+          description="Envanterdeki cihaz sayısı"
+          iconBg="bg-emerald-50 text-emerald-600"
+          icon={<MonitorSmartphone className="h-6 w-6" />}
+        />
+      </div>
 
-          return (
-            <Card key={stat.key}>
-              <CardContent className="flex items-center gap-4 py-5">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.bgColor}`}>
-                  {stat.icon}
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{displayValue}</p>
-                  {stat.pending && (
-                    <p className="mt-1 text-xs text-amber-600">Backend entegrasyonu bekleniyor</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <SectionCard title="Hızlı İşlemler" description="Sık kullanılan modüllere geçiş">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {quickLinks.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="group flex items-center justify-between rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 px-4 py-3 shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-card"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-medium text-slate-800">{item.label}</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-primary-500" />
+            </Link>
+          ))}
+        </div>
+      </SectionCard>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
+        <ChartPlaceholder title="Aylık İş Emri Trendi" />
+        <ChartPlaceholder title="Servis Tamamlanma Oranı" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
+        <SectionCard title="Son Aktiviteler" description="Sistemdeki son hareketler">
+          <EmptyState
+            title="Veri yok"
+            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+          />
+        </SectionCard>
+
+        <SectionCard title="Yaklaşan Teslimatlar" description="Parça ve cihaz teslim takibi">
+          <EmptyState
+            title="Veri yok"
+            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+          />
+        </SectionCard>
+
+        <SectionCard title="Kritik Durumlar" description="Acil müdahale gerektiren kayıtlar">
+          <EmptyState
+            title="Veri yok"
+            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+            icon={<AlertTriangle className="h-7 w-7 text-amber-500" strokeWidth={1.5} />}
+          />
+        </SectionCard>
       </div>
     </div>
   );

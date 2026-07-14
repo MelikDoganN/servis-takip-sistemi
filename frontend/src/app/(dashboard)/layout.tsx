@@ -1,9 +1,16 @@
+"use client";
+
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <AuthGuard>
+      <DashboardLayout>{children}</DashboardLayout>
+    </AuthGuard>
+  );
 }

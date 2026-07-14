@@ -1,29 +1,41 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
+import { authService } from "@/services/authService";
+import { setToken } from "@/lib/auth";
+import { ApiError } from "@/types/api";
+import { Settings2 } from "lucide-react";
 
 interface FormErrors {
   email?: string;
   password?: string;
+  fullName?: string;
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const AUTH_NOT_READY_MESSAGE =
-  "Kimlik doğrulama servisi backend'de henüz mevcut değil. AuthController eklendikten sonra giriş aktif olacak.";
-
 export function LoginForm() {
+  const router = useRouter();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [apiError, setApiError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
+    if (mode === "register" && !fullName.trim()) {
+      newErrors.fullName = "Ad soyad boş olamaz";
+    }
     if (!email.trim()) {
       newErrors.email = "E-posta adresi boş olamaz";
     } else if (!emailRegex.test(email)) {
@@ -36,31 +48,92 @@ export function LoginForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setApiError("");
+    setSuccessMessage("");
     if (!validate()) return;
-    setApiError(AUTH_NOT_READY_MESSAGE);
+
+    setLoading(true);
+    try {
+      if (mode === "register") {
+        const result = await authService.register({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          password,
+          phone: phone.trim() || undefined,
+        });
+        setSuccessMessage(result.message || "Kayıt başarılı. Şimdi giriş yapabilirsiniz.");
+        setMode("login");
+        setPassword("");
+        return;
+      }
+
+      const result = await authService.login({
+        email: email.trim(),
+        password,
+      });
+
+      if (!result?.token) {
+        setApiError("Giriş yanıtında token bulunamadı.");
+        return;
+      }
+
+      setToken(result.token);
+      router.replace("/dashboard");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setApiError(apiErr.message || "Giriş yapılamadı");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-primary-700 px-4">
-      <div className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary-700/40 via-slate-950 to-slate-950" />
+      <div className="pointer-events-none absolute -left-24 top-24 h-72 w-72 rounded-full bg-primary-600/20 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 bottom-10 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
+
+      <div className="relative w-full max-w-md animate-slide-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-600 shadow-lg">
-            <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-elevated">
+            <Settings2 className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Servis Takip Sistemi</h1>
-          <p className="mt-2 text-sm text-gray-300">Yönetim paneline giriş yapın</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Servis Takip Sistemi</h1>
+          <p className="mt-2 text-sm text-slate-300">
+            {mode === "login" ? "Yönetim paneline giriş yapın" : "Yeni hesap oluşturun"}
+          </p>
         </div>
 
-        <Card>
+        <Card className="border-slate-200/20 bg-white/95 shadow-elevated backdrop-blur">
           <CardContent className="py-6">
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               {apiError && <ErrorMessage message={apiError} />}
+              {successMessage && (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 animate-slide-up">
+                  {successMessage}
+                </p>
+              )}
+
+              {mode === "register" && (
+                <>
+                  <Input
+                    label="Ad Soyad"
+                    value={fullName}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: undefined }));
+                    }}
+                    error={errors.fullName}
+                  />
+                  <Input
+                    label="Telefon"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </>
+              )}
 
               <Input
                 label="Email"
@@ -85,12 +158,46 @@ export function LoginForm() {
                   if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
                 }}
                 error={errors.password}
-                autoComplete="current-password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
               />
 
-              <Button type="submit" fullWidth size="lg">
-                Giriş Yap
+              <Button type="submit" fullWidth size="lg" loading={loading}>
+                {mode === "login" ? "Giriş Yap" : "Kayıt Ol"}
               </Button>
+
+              <p className="text-center text-sm text-slate-500">
+                {mode === "login" ? (
+                  <>
+                    Hesabınız yok mu?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-primary-600 transition hover:text-primary-700"
+                      onClick={() => {
+                        setMode("register");
+                        setApiError("");
+                        setSuccessMessage("");
+                      }}
+                    >
+                      Kayıt ol
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Zaten hesabınız var mı?{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-primary-600 transition hover:text-primary-700"
+                      onClick={() => {
+                        setMode("login");
+                        setApiError("");
+                        setSuccessMessage("");
+                      }}
+                    >
+                      Giriş yap
+                    </button>
+                  </>
+                )}
+              </p>
             </form>
           </CardContent>
         </Card>

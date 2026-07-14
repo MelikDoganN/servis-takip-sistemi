@@ -1,6 +1,6 @@
-# Frontend - Next.js (K2)
+# Frontend - Servis Takip Sistemi
 
-Servis Takip Sistemi yönetim paneli.
+Next.js tabanlı yönetim paneli.
 
 ## Kurulum
 
@@ -16,22 +16,3 @@ npm run dev
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8080
 ```
-
-## Backend Entegrasyonu (Mevcut)
-
-| Servis | Endpoint |
-|--------|----------|
-| Müşteri listele | GET /api/customers |
-| Müşteri oluştur | POST /api/customers |
-| Cihaz listele | GET /api/devices |
-| Cihaz oluştur | POST /api/devices |
-| Garanti kontrol | GET /api/warranty/check/{deviceId}/{type} |
-| Garanti oluştur | POST /api/warranty/generate/{deviceId}/{type} |
-| Dashboard | GET /api/customers + GET /api/devices |
-
-## Bekleyen Entegrasyonlar
-
-- Auth (login) — AuthController yok
-- İş Emirleri — WorkOrder controller yok
-- Raporlar — Report endpoint yok
-- Kullanıcı Yönetimi — User API yok

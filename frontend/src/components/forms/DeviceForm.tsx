@@ -1,13 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { CreateDeviceRequest } from "@/types/device";
+import { CreateDeviceRequest, Device } from "@/types/device";
 import { Customer } from "@/types/customer";
 
 interface DeviceFormProps {
   customers: Customer[];
+  initialValues?: Device;
+  submitLabel?: string;
   onSubmit: (data: CreateDeviceRequest) => Promise<void>;
   onCancel: () => void;
 }
@@ -18,20 +20,42 @@ interface FormErrors {
   serialNumber?: string;
 }
 
-export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
-  const [customerId, setCustomerId] = useState("");
-  const [modelId, setModelId] = useState("");
-  const [serialNumber, setSerialNumber] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState("");
-  const [installationDate, setInstallationDate] = useState("");
+export function DeviceForm({
+  customers,
+  initialValues,
+  submitLabel = "Kaydet",
+  onSubmit,
+  onCancel,
+}: DeviceFormProps) {
+  const [customerId, setCustomerId] = useState(
+    initialValues?.customer?.id ? String(initialValues.customer.id) : ""
+  );
+  const [modelId, setModelId] = useState(
+    initialValues?.model?.id ? String(initialValues.model.id) : ""
+  );
+  const [serialNumber, setSerialNumber] = useState(initialValues?.serialNumber ?? "");
+  const [purchaseDate, setPurchaseDate] = useState(initialValues?.purchaseDate ?? "");
+  const [installationDate, setInstallationDate] = useState(
+    initialValues?.installationDate ?? ""
+  );
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  useEffect(() => {
+    setCustomerId(initialValues?.customer?.id ? String(initialValues.customer.id) : "");
+    setModelId(initialValues?.model?.id ? String(initialValues.model.id) : "");
+    setSerialNumber(initialValues?.serialNumber ?? "");
+    setPurchaseDate(initialValues?.purchaseDate ?? "");
+    setInstallationDate(initialValues?.installationDate ?? "");
+  }, [initialValues]);
+
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
     if (!customerId) newErrors.customerId = "Müşteri seçilmelidir";
-    if (!modelId || isNaN(Number(modelId))) newErrors.modelId = "Geçerli model ID girin";
+    if (!modelId || isNaN(Number(modelId)) || Number(modelId) <= 0) {
+      newErrors.modelId = "Geçerli bir model ID girin";
+    }
     if (!serialNumber.trim()) newErrors.serialNumber = "Seri numarası boş olamaz";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -53,7 +77,7 @@ export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
       });
     } catch (err) {
       const apiErr = err as { message?: string };
-      setSubmitError(apiErr.message || "Cihaz oluşturulamadı");
+      setSubmitError(apiErr.message || "İşlem başarısız oldu");
     } finally {
       setLoading(false);
     }
@@ -61,6 +85,12 @@ export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        Marka ve model listesi için backend API henüz yok. Cihaz kaydı, veritabanında
+        halihazırda bulunan bir <strong>model ID</strong> ile yapılmalıdır. Uydurma
+        marka/model gönderilmez.
+      </div>
+
       <div className="w-full">
         <label htmlFor="customerId" className="mb-1.5 block text-sm font-medium text-gray-700">
           Müşteri
@@ -69,9 +99,11 @@ export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
           id="customerId"
           value={customerId}
           onChange={(e) => setCustomerId(e.target.value)}
-          className={`block w-full rounded-lg border px-3 py-2 text-sm ${
-            errors.customerId ? "border-red-500" : "border-gray-300"
-          }`}
+          className={
+            errors.customerId
+              ? "field-base border-red-400 focus:border-red-500 focus:ring-red-500/15"
+              : "field-base"
+          }
         >
           <option value="">Müşteri seçin</option>
           {customers.map((c) => (
@@ -89,6 +121,7 @@ export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
         value={modelId}
         onChange={(e) => setModelId(e.target.value)}
         error={errors.modelId}
+        placeholder="Örn: 1"
       />
 
       <Input
@@ -102,14 +135,14 @@ export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
       <Input
         label="Satın Alma Tarihi"
         type="date"
-        value={purchaseDate}
+        value={purchaseDate || ""}
         onChange={(e) => setPurchaseDate(e.target.value)}
       />
 
       <Input
         label="Kurulum Tarihi"
         type="date"
-        value={installationDate}
+        value={installationDate || ""}
         onChange={(e) => setInstallationDate(e.target.value)}
       />
 
@@ -120,7 +153,7 @@ export function DeviceForm({ customers, onSubmit, onCancel }: DeviceFormProps) {
           İptal
         </Button>
         <Button type="submit" loading={loading}>
-          Kaydet
+          {submitLabel}
         </Button>
       </div>
     </form>

@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { CreateCustomerRequest } from "@/types/customer";
+import { CreateCustomerRequest, Customer } from "@/types/customer";
 
 interface CustomerFormProps {
+  initialValues?: Partial<Customer>;
+  submitLabel?: string;
   onSubmit: (data: CreateCustomerRequest) => Promise<void>;
   onCancel: () => void;
 }
@@ -14,15 +16,28 @@ interface FormErrors {
   fullName?: string;
 }
 
-export function CustomerForm({ onSubmit, onCancel }: CustomerFormProps) {
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
+export function CustomerForm({
+  initialValues,
+  submitLabel = "Kaydet",
+  onSubmit,
+  onCancel,
+}: CustomerFormProps) {
+  const [fullName, setFullName] = useState(initialValues?.fullName ?? "");
+  const [phone, setPhone] = useState(initialValues?.phone ?? "");
+  const [whatsappNumber, setWhatsappNumber] = useState(initialValues?.whatsappNumber ?? "");
+  const [email, setEmail] = useState(initialValues?.email ?? "");
+  const [address, setAddress] = useState(initialValues?.address ?? "");
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    setFullName(initialValues?.fullName ?? "");
+    setPhone(initialValues?.phone ?? "");
+    setWhatsappNumber(initialValues?.whatsappNumber ?? "");
+    setEmail(initialValues?.email ?? "");
+    setAddress(initialValues?.address ?? "");
+  }, [initialValues]);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -49,7 +64,7 @@ export function CustomerForm({ onSubmit, onCancel }: CustomerFormProps) {
       });
     } catch (err) {
       const apiErr = err as { message?: string };
-      setSubmitError(apiErr.message || "Kayıt oluşturulamadı");
+      setSubmitError(apiErr.message || "İşlem başarısız oldu");
     } finally {
       setLoading(false);
     }
@@ -64,11 +79,7 @@ export function CustomerForm({ onSubmit, onCancel }: CustomerFormProps) {
         error={errors.fullName}
         required
       />
-      <Input
-        label="Telefon"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-      />
+      <Input label="Telefon" value={phone} onChange={(e) => setPhone(e.target.value)} />
       <Input
         label="WhatsApp Numarası"
         value={whatsappNumber}
@@ -80,22 +91,16 @@ export function CustomerForm({ onSubmit, onCancel }: CustomerFormProps) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <Input
-        label="Adres"
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-      />
+      <Input label="Adres" value={address} onChange={(e) => setAddress(e.target.value)} />
 
-      {submitError && (
-        <p className="text-sm text-red-600">{submitError}</p>
-      )}
+      {submitError && <p className="text-sm text-red-600">{submitError}</p>}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           İptal
         </Button>
         <Button type="submit" loading={loading}>
-          Kaydet
+          {submitLabel}
         </Button>
       </div>
     </form>

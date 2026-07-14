@@ -12,8 +12,6 @@ export const dashboardService = {
     return {
       totalCustomers: customers.length,
       totalDevices: devices.length,
-      openWorkOrders: null,
-      waitingParts: null,
     };
   },
 };

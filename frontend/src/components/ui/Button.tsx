@@ -1,4 +1,5 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
@@ -12,17 +13,22 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: "bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500",
-  secondary: "bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500",
-  outline: "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-primary-500",
-  ghost: "text-gray-700 hover:bg-gray-100 focus:ring-gray-500",
-  danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
+  primary:
+    "bg-primary-600 text-white shadow-soft hover:bg-primary-700 hover:shadow-card active:scale-[0.98] focus-visible:ring-primary-500",
+  secondary:
+    "bg-slate-800 text-white shadow-soft hover:bg-slate-900 hover:shadow-card active:scale-[0.98] focus-visible:ring-slate-500",
+  outline:
+    "border border-slate-200 bg-white text-slate-700 shadow-soft hover:border-slate-300 hover:bg-slate-50 hover:shadow-card active:scale-[0.98] focus-visible:ring-primary-500",
+  ghost:
+    "text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.98] focus-visible:ring-slate-400",
+  danger:
+    "bg-red-600 text-white shadow-soft hover:bg-red-700 hover:shadow-card active:scale-[0.98] focus-visible:ring-red-500",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-sm",
-  md: "px-4 py-2 text-sm",
-  lg: "px-6 py-3 text-base",
+  sm: "h-8 px-3 text-xs",
+  md: "h-10 px-4 text-sm",
+  lg: "h-11 px-5 text-sm",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -44,7 +50,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+          "disabled:pointer-events-none disabled:opacity-50",
           variantStyles[variant],
           sizeStyles[size],
           fullWidth && "w-full",
@@ -52,12 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...props}
       >
-        {loading && (
-          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        )}
+        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
         {children}
       </button>
     );

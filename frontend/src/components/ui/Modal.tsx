@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./Button";
 
@@ -42,23 +43,30 @@ export function Modal({ isOpen, onClose, title, children, size = "md" }: ModalPr
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-fade-in"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
     >
-      <div className={cn("w-full rounded-xl bg-white shadow-xl", sizeStyles[size])} role="dialog" aria-modal="true">
+      <div
+        className={cn(
+          "w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-elevated animate-scale-in",
+          sizeStyles[size]
+        )}
+        role="dialog"
+        aria-modal="true"
+      >
         {title && (
-          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label="Kapat">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+            <h2 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
+              {title}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label="Kapat" className="!px-2">
+              <X className="h-4 w-4" />
             </Button>
           </div>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="max-h-[min(80vh,720px)] overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
       </div>
     </div>
   );
