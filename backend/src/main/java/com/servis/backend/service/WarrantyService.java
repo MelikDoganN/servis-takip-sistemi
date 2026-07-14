@@ -22,7 +22,7 @@ public class WarrantyService {
     private WarrantyRecordRepository warrantyRecordRepository;
 
     /**
-     * 7. GÜN FORMÜLÜ: G = T_başlangıç + F_süre
+     *  G = T_başlangıç + F_süre
      * T_başlangıç = Cihazın satın alma tarihi (yoksa kurulum tarihi)
      * F_süre = DeviceModel'deki ilgili garanti ayı (PARTS, LABOR, GENERAL)
      */
@@ -84,8 +84,6 @@ public class WarrantyService {
                 .findByDeviceIdAndWarrantyType(deviceId, warrantyType.toUpperCase());
 
         if (record.isPresent()) {
-            // Bugün tarihi, bitiş tarihinden önce mi (veya eşit mi)? 
-            // Çoğu durumda eşit olabilir, ama genelde "after" kontrolü yapılır.
             return record.get().getEndDate().isAfter(LocalDate.now());
         }
         return false; // Kayıt yoksa garantisizdir.
