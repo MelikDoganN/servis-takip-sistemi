@@ -54,12 +54,12 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> userData) {
-        // Rolü bul yoksa oluştur
-        Role role = roleRepository.findByName("ADMIN")
+        // Rolü bul, yoksa CENTER_OPERATOR oluştur
+        Role role = roleRepository.findByName("CENTER_OPERATOR")
                 .orElseGet(() -> {
                     Role newRole = new Role();
-                    newRole.setName("ADMIN");
-                    newRole.setDescription("Yönetici");
+                    newRole.setName("CENTER_OPERATOR");
+                    newRole.setDescription("Merkez Operatörü");
                     newRole.setCreatedAt(java.time.LocalDateTime.now());
                     return roleRepository.save(newRole);
                 });
