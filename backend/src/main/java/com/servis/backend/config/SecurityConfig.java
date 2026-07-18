@@ -44,6 +44,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/customers/**").permitAll()
                 .requestMatchers("/api/devices/**").permitAll()
                 .requestMatchers("/api/warranty/**").permitAll()
+                .requestMatchers("/api/workorders/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

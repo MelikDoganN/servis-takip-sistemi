@@ -28,8 +28,9 @@ public class WorkOrder {
     @JoinColumn(name = "device_id", nullable = false)
     private Device device;
 
-    @Column(name = "technician_id")
-    private Long technicianId; // Şimdilik Long, ileride Technician entity'si eklendiğinde ilişki kurulur
+    @ManyToOne
+    @JoinColumn(name = "technician_id")
+    private Technician technician; // Artık Long değil, ilişkili entity
 
     @ManyToOne
     @JoinColumn(name = "created_by_user_id", nullable = false)

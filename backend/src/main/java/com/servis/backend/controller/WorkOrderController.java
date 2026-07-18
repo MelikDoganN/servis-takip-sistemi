@@ -42,4 +42,14 @@ public class WorkOrderController {
         // userDetails'ten User entity'sine çevirme işlemi sonra yapılacak, şimdilik null
         return ResponseEntity.ok(workOrderService.updateStatus(id, status, null, channel));
     }
+    
+    @PutMapping("/{id}/assign/{technicianId}")
+    public ResponseEntity<WorkOrder> assignTechnician(
+            @PathVariable Long id,
+            @PathVariable Long technicianId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        // changedBy kullanıcısı şimdilik null geçilebilir, ileride doldurulur
+        return ResponseEntity.ok(workOrderService.assignTechnician(id, technicianId,null));
+    }
+    
 }

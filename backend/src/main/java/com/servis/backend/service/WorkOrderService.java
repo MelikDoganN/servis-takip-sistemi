@@ -1,6 +1,7 @@
 package com.servis.backend.service;
 
 import com.servis.backend.entity.*;
+import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.WorkOrderRepository;
 import com.servis.backend.repository.WorkOrderStatusHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,9 @@ public class WorkOrderService {
 
     @Autowired
     private WorkOrderStatusHistoryRepository historyRepository;
+
+    @Autowired
+    private TechnicianRepository technicianRepository; // 9. günde eklendi
 
     public List<WorkOrder> getAllWorkOrders() {
         return workOrderRepository.findAll();
@@ -54,6 +58,31 @@ public class WorkOrderService {
         WorkOrder updated = workOrderRepository.save(workOrder);
         saveHistory(updated, changedBy, newStatus, oldStatus + " → " + newStatus, channel);
         return updated;
+    }
+
+    @Transactional
+    public WorkOrder assignTechnician(Long workOrderId, Long technicianId, User changedBy) {
+        WorkOrder workOrder = getWorkOrderById(workOrderId);
+        Technician technician = technicianRepository.findById(technicianId)
+                .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + technicianId));
+
+        if (workOrder.getStatus().equals(WorkOrderStatus.CLOSED.name())) {
+            throw new RuntimeException("Kapalı iş emrine teknisyen atanamaz");
+        }
+
+        // Teknisyeni ata ve durumu güncelle
+        workOrder.setTechnician(technician);
+        workOrder.setStatus(WorkOrderStatus.ASSIGNED.name());
+        workOrder.setAssignedAt(LocalDateTime.now());
+
+        WorkOrder saved = workOrderRepository.save(workOrder);
+        saveHistory(saved, changedBy, WorkOrderStatus.ASSIGNED.name(), "Teknisyen atandı: " + technician.getId(), "WEB");
+
+        // Teknisyenin iş yükünü artır
+        technician.setCurrentWorkload(technician.getCurrentWorkload() + 1);
+        technicianRepository.save(technician);
+
+        return saved;
     }
 
     private void validateTransition(String oldStatus, String newStatus) {
