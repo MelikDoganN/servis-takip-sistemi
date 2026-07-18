@@ -86,6 +86,6 @@ public class WarrantyService {
         if (record.isPresent()) {
             return record.get().getEndDate().isAfter(LocalDate.now());
         }
-        return false; // Kayıt yoksa garantisizdir.
+        return false; 
     }
 }

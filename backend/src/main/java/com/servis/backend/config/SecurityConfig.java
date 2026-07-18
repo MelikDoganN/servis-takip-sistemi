@@ -2,10 +2,12 @@ package com.servis.backend.config;
 
 import com.servis.backend.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.security.autoconfigure.web.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity; // <--- EKLE
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,10 +19,13 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+
+
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity  
 public class SecurityConfig {
 
     @Autowired
@@ -33,9 +38,12 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/**").permitAll()
-                .requestMatchers("/api/customers/**").permitAll()   // Geçici
-                .requestMatchers("/api/devices/**").permitAll()     
-                .requestMatchers("/api/warranty/**").permitAll()    
+                
+                .requestMatchers(PathRequest.toH2Console()).permitAll() 
+                
+                .requestMatchers("/api/customers/**").permitAll()
+                .requestMatchers("/api/devices/**").permitAll()
+                .requestMatchers("/api/warranty/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
