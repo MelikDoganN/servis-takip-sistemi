@@ -10,6 +10,9 @@ import {
   ClipboardList,
   ArrowRight,
   AlertTriangle,
+  CircleDot,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -59,7 +62,11 @@ export default function DashboardPage() {
           <div className="skeleton h-8 w-48" />
           <div className="skeleton h-4 w-72" />
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </div>
@@ -82,7 +89,7 @@ export default function DashboardPage() {
 
       {error && <ErrorMessage message={error} />}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
         <KpiCard
           label="Toplam Müşteri"
           value={stats?.totalCustomers ?? 0}
@@ -96,6 +103,34 @@ export default function DashboardPage() {
           description="Envanterdeki cihaz sayısı"
           iconBg="bg-emerald-50 text-emerald-600"
           icon={<MonitorSmartphone className="h-6 w-6" />}
+        />
+        <KpiCard
+          label="Toplam İş Emri"
+          value={stats?.totalWorkOrders ?? 0}
+          description="Tüm iş emirleri"
+          iconBg="bg-sky-50 text-sky-600"
+          icon={<ClipboardList className="h-6 w-6" />}
+        />
+        <KpiCard
+          label="Açık İş Emri"
+          value={stats?.openWorkOrders ?? 0}
+          description="Durum: OPEN"
+          iconBg="bg-amber-50 text-amber-600"
+          icon={<CircleDot className="h-6 w-6" />}
+        />
+        <KpiCard
+          label="Çözülen"
+          value={stats?.resolvedWorkOrders ?? 0}
+          description="Durum: RESOLVED"
+          iconBg="bg-teal-50 text-teal-600"
+          icon={<CheckCircle2 className="h-6 w-6" />}
+        />
+        <KpiCard
+          label="Kapatılan"
+          value={stats?.closedWorkOrders ?? 0}
+          description="Durum: CLOSED"
+          iconBg="bg-slate-100 text-slate-600"
+          icon={<XCircle className="h-6 w-6" />}
         />
       </div>
 

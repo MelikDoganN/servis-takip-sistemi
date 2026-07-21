@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   BarChart3,
   UserCog,
+  Wrench,
 } from "lucide-react";
 
 export interface NavItem {
@@ -45,6 +46,13 @@ export const navItems: NavItem[] = [
     description: "Servis talepleri",
     roles: ["ROLE_ADMIN", "ROLE_REGION_MANAGER", "ROLE_CENTER_OPERATOR", "ROLE_TECHNICIAN"],
     icon: <ClipboardList className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
+  },
+  {
+    label: "Teknisyenler",
+    href: "/teknisyenler",
+    description: "Saha teknisyenleri",
+    roles: ["ROLE_ADMIN", "ROLE_REGION_MANAGER", "ROLE_CENTER_OPERATOR"],
+    icon: <Wrench className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
   },
   {
     label: "Garanti Sorgulama",

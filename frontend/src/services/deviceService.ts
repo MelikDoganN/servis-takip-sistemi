@@ -4,10 +4,25 @@ import {
   CreateDeviceRequest,
   UpdateDeviceRequest,
 } from "@/types/device";
+import { PageResponse } from "@/types/api";
+
+function unwrapContent<T>(data: PageResponse<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return data.content ?? [];
+}
 
 export const deviceService = {
-  getAll(): Promise<Device[]> {
-    return apiClient<Device[]>("/api/devices");
+  getPage(page = 0, size = 10): Promise<PageResponse<Device>> {
+    return apiClient<PageResponse<Device>>(
+      `/api/devices?page=${page}&size=${size}`
+    );
+  },
+
+  async getAll(size = 1000): Promise<Device[]> {
+    const data = await apiClient<PageResponse<Device> | Device[]>(
+      `/api/devices?page=0&size=${size}`
+    );
+    return unwrapContent(data);
   },
 
   getById(id: number): Promise<Device> {

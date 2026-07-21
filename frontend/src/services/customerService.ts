@@ -4,10 +4,25 @@ import {
   CreateCustomerRequest,
   UpdateCustomerRequest,
 } from "@/types/customer";
+import { PageResponse } from "@/types/api";
+
+function unwrapContent<T>(data: PageResponse<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return data.content ?? [];
+}
 
 export const customerService = {
-  getAll(): Promise<Customer[]> {
-    return apiClient<Customer[]>("/api/customers");
+  getPage(page = 0, size = 10): Promise<PageResponse<Customer>> {
+    return apiClient<PageResponse<Customer>>(
+      `/api/customers?page=${page}&size=${size}`
+    );
+  },
+
+  async getAll(size = 1000): Promise<Customer[]> {
+    const data = await apiClient<PageResponse<Customer> | Customer[]>(
+      `/api/customers?page=0&size=${size}`
+    );
+    return unwrapContent(data);
   },
 
   getById(id: number): Promise<Customer> {
