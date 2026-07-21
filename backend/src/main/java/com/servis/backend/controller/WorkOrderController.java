@@ -2,6 +2,7 @@ package com.servis.backend.controller;
 
 import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.service.WorkOrderService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -14,6 +15,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/workorders")
@@ -22,7 +24,7 @@ public class WorkOrderController {
     @Autowired
     private WorkOrderService workOrderService;
 
-    // === LİSTELEME (Sayfalama + Filtreleme) ===
+    // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün
     @GetMapping
     public Page<WorkOrder> getAll(
             @RequestParam(defaultValue = "0") int page,
@@ -37,19 +39,19 @@ public class WorkOrderController {
         return workOrderService.getAllWorkOrders(pageable);
     }
 
-    // === ID'YE GÖRE GETİR ===
+    // 2. ID'YE GÖRE GETİR
     @GetMapping("/{id}")
     public ResponseEntity<WorkOrder> getById(@PathVariable Long id) {
         return ResponseEntity.ok(workOrderService.getWorkOrderById(id));
     }
 
-    // === YENİ İŞ EMRİ OLUŞTUR ===
+    // 3. YENİ İŞ EMRİ OLUŞTUR (Validation aktif - 12. Gün)
     @PostMapping
-    public ResponseEntity<WorkOrder> create(@RequestBody WorkOrder workOrder) {
+    public ResponseEntity<WorkOrder> create(@Valid @RequestBody WorkOrder workOrder) {
         return new ResponseEntity<>(workOrderService.createWorkOrder(workOrder), HttpStatus.CREATED);
     }
 
-    // === DURUM GÜNCELLE (State Machine) ===
+    // 4. DURUM GÜNCELLE (State Machine)
     @PutMapping("/{id}/status")
     public ResponseEntity<WorkOrder> updateStatus(
             @PathVariable Long id,
@@ -60,13 +62,18 @@ public class WorkOrderController {
         return ResponseEntity.ok(workOrderService.updateStatus(id, status, null, channel));
     }
 
-    // === TEKNİSYEN ATA ===
+    // 5. TEKNİSYEN ATA
     @PutMapping("/{id}/assign/{technicianId}")
     public ResponseEntity<WorkOrder> assignTechnician(
             @PathVariable Long id,
             @PathVariable Long technicianId,
             @AuthenticationPrincipal UserDetails userDetails) {
-        // changedBy kullanıcısı şimdilik null geçilebilir, ileride doldurulur
         return ResponseEntity.ok(workOrderService.assignTechnician(id, technicianId, null));
+    }
+
+    // 6. KANBAN PANOSU (Duruma göre gruplama - 12. Gün)
+    @GetMapping("/kanban")
+    public Map<String, List<WorkOrder>> getKanban() {
+        return workOrderService.getKanbanGroupedByStatus();
     }
 }

@@ -2,6 +2,9 @@ package com.servis.backend.controller;
 
 import com.servis.backend.entity.Device;
 import com.servis.backend.service.DeviceService;
+
+import jakarta.validation.Valid;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -34,15 +37,13 @@ public class DeviceController {
         return ResponseEntity.ok(deviceService.getDeviceById(id));
     }
 
-    // Yeni cihaz oluşturur
     @PostMapping
-    public ResponseEntity<Device> createDevice(@RequestBody Device device) {
+    public ResponseEntity<Device> createDevice(@Valid @RequestBody Device device) {
         return new ResponseEntity<>(deviceService.createDevice(device), HttpStatus.CREATED);
     }
 
-    // Cihaz bilgilerini günceller
     @PutMapping("/{id}")
-    public ResponseEntity<Device> updateDevice(@PathVariable Long id, @RequestBody Device device) {
+    public ResponseEntity<Device> updateDevice(@PathVariable Long id, @Valid @RequestBody Device device) {
         return ResponseEntity.ok(deviceService.updateDevice(id, device));
     }
 

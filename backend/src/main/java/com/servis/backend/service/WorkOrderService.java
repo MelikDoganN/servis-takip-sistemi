@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class WorkOrderService {
@@ -25,8 +27,7 @@ public class WorkOrderService {
     @Autowired
     private TechnicianRepository technicianRepository;
 
-    
-    
+    // === LİSTELEME (Sayfalama Destekli) - 11. Gün ===
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
         return workOrderRepository.findAll(pageable);
     }
@@ -35,8 +36,7 @@ public class WorkOrderService {
         return workOrderRepository.findByStatus(status, pageable);
     }
 
-    
-    
+    // === LİSTELEME (Sayfalama Yok) ===
     public List<WorkOrder> getAllWorkOrders() {
         return workOrderRepository.findAll();
     }
@@ -46,8 +46,7 @@ public class WorkOrderService {
                 .orElseThrow(() -> new RuntimeException("İş emri bulunamadı: " + id));
     }
 
-    
-    
+    // === İŞ EMRİ OLUŞTURMA ===
     @Transactional
     public WorkOrder createWorkOrder(WorkOrder workOrder) {
         workOrder.setStatus(WorkOrderStatus.OPEN.name());
@@ -56,8 +55,7 @@ public class WorkOrderService {
         return saved;
     }
 
-    
-    
+    // === DURUM GÜNCELLEME (State Machine) ===
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
@@ -78,8 +76,7 @@ public class WorkOrderService {
         return updated;
     }
 
-    
-    
+    // === TEKNİSYEN ATAMA ===
     @Transactional
     public WorkOrder assignTechnician(Long workOrderId, Long technicianId, User changedBy) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
@@ -103,8 +100,7 @@ public class WorkOrderService {
         return saved;
     }
 
-    
-    
+    // === DURUM GEÇİŞ KONTROLÜ (State Machine Kuralları) ===
     private void validateTransition(String oldStatus, String newStatus) {
         switch (oldStatus) {
             case "OPEN" -> {
@@ -128,8 +124,7 @@ public class WorkOrderService {
         }
     }
 
-    
-    
+    // === DURUM GEÇMİŞİ KAYDETME ===
     private void saveHistory(WorkOrder workOrder, User changedBy, String newStatus, String description, String channel) {
         WorkOrderStatusHistory history = new WorkOrderStatusHistory();
         history.setWorkOrder(workOrder);
@@ -139,5 +134,11 @@ public class WorkOrderService {
         history.setDescription(description);
         history.setChannel(channel);
         historyRepository.save(history);
+    }
+
+    // === KANBAN PANOSU (Duruma göre gruplama) - 12. Gün ===
+    public Map<String, List<WorkOrder>> getKanbanGroupedByStatus() {
+        List<WorkOrder> all = workOrderRepository.findAll();
+        return all.stream().collect(Collectors.groupingBy(WorkOrder::getStatus));
     }
 }
