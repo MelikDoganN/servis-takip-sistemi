@@ -28,19 +28,19 @@ public class TechnicianController {
     }
 
     // Sadece Admin ve Bölge Yöneticisi ekleyebilir
-    @PreAuthorize("hasAnyRole('ADMIN', 'REGION_MANAGER')")
+   // @PreAuthorize("hasAnyRole('ADMIN', 'REGION_MANAGER')")
     @PostMapping
     public ResponseEntity<Technician> createTechnician(@RequestBody Technician technician) {
         return new ResponseEntity<>(technicianService.createTechnician(technician), HttpStatus.CREATED);
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'REGION_MANAGER')")
+  //  @PreAuthorize("hasAnyRole('ADMIN', 'REGION_MANAGER')")
     @PutMapping("/{id}")
     public ResponseEntity<Technician> updateTechnician(@PathVariable Long id, @RequestBody Technician technician) {
         return ResponseEntity.ok(technicianService.updateTechnician(id, technician));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+  //  @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTechnician(@PathVariable Long id) {
         technicianService.deleteTechnician(id);

@@ -3,6 +3,8 @@ package com.servis.backend.service;
 import com.servis.backend.entity.Customer;
 import com.servis.backend.repository.CustomerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,6 +15,12 @@ public class CustomerService {
     @Autowired
     private CustomerRepository customerRepository;
 
+    // Sayfalama destekli müşteri listesi
+    public Page<Customer> getAllCustomers(Pageable pageable) {
+        return customerRepository.findAll(pageable);
+    }
+
+    // Tüm müşteriler (eski metot, sayfalama yok)
     public List<Customer> getAllCustomers() {
         return customerRepository.findAll();
     }

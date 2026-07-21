@@ -3,6 +3,8 @@ package com.servis.backend.service;
 import com.servis.backend.entity.Device;
 import com.servis.backend.repository.DeviceRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,6 +15,12 @@ public class DeviceService {
     @Autowired
     private DeviceRepository deviceRepository;
 
+    // Sayfalama destekli cihaz listesi
+    public Page<Device> getAllDevices(Pageable pageable) {
+        return deviceRepository.findAll(pageable);
+    }
+
+    // Tüm cihazlar (eski metot, sayfalama yok)
     public List<Device> getAllDevices() {
         return deviceRepository.findAll();
     }
@@ -23,7 +31,6 @@ public class DeviceService {
     }
 
     public Device createDevice(Device device) {
-        // Aynı seri numarası varsa hata fırlat (isteğe bağlı)
         if (deviceRepository.findBySerialNumber(device.getSerialNumber()).isPresent()) {
             throw new RuntimeException("Bu seri numarası zaten kayıtlı: " + device.getSerialNumber());
         }

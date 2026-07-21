@@ -5,6 +5,8 @@ import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.WorkOrderRepository;
 import com.servis.backend.repository.WorkOrderStatusHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,8 +23,20 @@ public class WorkOrderService {
     private WorkOrderStatusHistoryRepository historyRepository;
 
     @Autowired
-    private TechnicianRepository technicianRepository; // 9. günde eklendi
+    private TechnicianRepository technicianRepository;
 
+    
+    
+    public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
+        return workOrderRepository.findAll(pageable);
+    }
+
+    public Page<WorkOrder> getWorkOrdersByStatus(String status, Pageable pageable) {
+        return workOrderRepository.findByStatus(status, pageable);
+    }
+
+    
+    
     public List<WorkOrder> getAllWorkOrders() {
         return workOrderRepository.findAll();
     }
@@ -32,6 +46,8 @@ public class WorkOrderService {
                 .orElseThrow(() -> new RuntimeException("İş emri bulunamadı: " + id));
     }
 
+    
+    
     @Transactional
     public WorkOrder createWorkOrder(WorkOrder workOrder) {
         workOrder.setStatus(WorkOrderStatus.OPEN.name());
@@ -40,6 +56,8 @@ public class WorkOrderService {
         return saved;
     }
 
+    
+    
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
@@ -60,6 +78,8 @@ public class WorkOrderService {
         return updated;
     }
 
+    
+    
     @Transactional
     public WorkOrder assignTechnician(Long workOrderId, Long technicianId, User changedBy) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
@@ -70,7 +90,6 @@ public class WorkOrderService {
             throw new RuntimeException("Kapalı iş emrine teknisyen atanamaz");
         }
 
-        // Teknisyeni ata ve durumu güncelle
         workOrder.setTechnician(technician);
         workOrder.setStatus(WorkOrderStatus.ASSIGNED.name());
         workOrder.setAssignedAt(LocalDateTime.now());
@@ -78,13 +97,14 @@ public class WorkOrderService {
         WorkOrder saved = workOrderRepository.save(workOrder);
         saveHistory(saved, changedBy, WorkOrderStatus.ASSIGNED.name(), "Teknisyen atandı: " + technician.getId(), "WEB");
 
-        // Teknisyenin iş yükünü artır
         technician.setCurrentWorkload(technician.getCurrentWorkload() + 1);
         technicianRepository.save(technician);
 
         return saved;
     }
 
+    
+    
     private void validateTransition(String oldStatus, String newStatus) {
         switch (oldStatus) {
             case "OPEN" -> {
@@ -108,6 +128,8 @@ public class WorkOrderService {
         }
     }
 
+    
+    
     private void saveHistory(WorkOrder workOrder, User changedBy, String newStatus, String description, String channel) {
         WorkOrderStatusHistory history = new WorkOrderStatusHistory();
         history.setWorkOrder(workOrder);
