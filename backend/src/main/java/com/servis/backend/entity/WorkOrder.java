@@ -1,6 +1,7 @@
 package com.servis.backend.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -39,9 +40,7 @@ public class WorkOrder {
     @Column(name = "region_id")
     private Long regionId; // Şimdilik Long
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
-
+   
     @Column(length = 30)
     private String status; // OPEN, ASSIGNED, WAITING_PARTS, RESOLVED, CLOSED
 
@@ -70,4 +69,8 @@ public class WorkOrder {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+    
+    @NotBlank(message = "Açıklama boş olamaz")
+    @Column(columnDefinition = "TEXT")
+    private String description;
 }

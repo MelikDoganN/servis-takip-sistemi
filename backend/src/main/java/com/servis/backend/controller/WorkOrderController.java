@@ -1,6 +1,8 @@
 package com.servis.backend.controller;
 
+import com.servis.backend.entity.User;
 import com.servis.backend.entity.WorkOrder;
+import com.servis.backend.service.UserService;
 import com.servis.backend.service.WorkOrderService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,9 @@ public class WorkOrderController {
     @Autowired
     private WorkOrderService workOrderService;
 
+    @Autowired
+    private UserService userService; // 4. adımda eklendi
+
     // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün
     @GetMapping
     public Page<WorkOrder> getAll(
@@ -45,9 +50,12 @@ public class WorkOrderController {
         return ResponseEntity.ok(workOrderService.getWorkOrderById(id));
     }
 
-    // 3. YENİ İŞ EMRİ OLUŞTUR (Validation aktif - 12. Gün)
+    // 3. YENİ İŞ EMRİ OLUŞTUR (createdBy otomatik - 4. Adım)
     @PostMapping
-    public ResponseEntity<WorkOrder> create(@Valid @RequestBody WorkOrder workOrder) {
+    public ResponseEntity<WorkOrder> create(@Valid @RequestBody WorkOrder workOrder,
+                                            @AuthenticationPrincipal UserDetails userDetails) {
+        User currentUser = userService.findByEmail(userDetails.getUsername());
+        workOrder.setCreatedBy(currentUser);
         return new ResponseEntity<>(workOrderService.createWorkOrder(workOrder), HttpStatus.CREATED);
     }
 
@@ -76,4 +84,10 @@ public class WorkOrderController {
     public Map<String, List<WorkOrder>> getKanban() {
         return workOrderService.getKanbanGroupedByStatus();
     }
+
+    // 7. İŞ EMRİ DURUM GEÇMİŞİ (13. Gün)
+ /*   @GetMapping("/{id}/history")
+    public ResponseEntity<List<WorkOrderStatusHistory>> getHistory(@PathVariable Long id) {
+        return ResponseEntity.ok(workOrderService.getStatusHistory(id));
+    }*/
 }

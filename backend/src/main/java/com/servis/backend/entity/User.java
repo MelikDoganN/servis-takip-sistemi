@@ -1,6 +1,9 @@
 package com.servis.backend.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -24,12 +27,17 @@ public class User {
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
+    @NotBlank(message = "Ad soyad boş olamaz")
     @Column(name = "full_name", length = 150, nullable = false)
     private String fullName;
 
-    @Column(length = 150, unique = true)
+    @NotBlank(message = "Email boş olamaz")
+    @Email(message = "Geçerli bir email adresi girin")
+    @Column(length = 150, unique = true, nullable = false)
     private String email;
 
+    @NotBlank(message = "Şifre boş olamaz")
+    @Size(min = 6, message = "Şifre en az 6 karakter olmalı")
     @Column(name = "password_hash", length = 255, nullable = false)
     private String passwordHash;
 
@@ -47,7 +55,3 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }
-
-
-
-
