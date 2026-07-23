@@ -141,4 +141,8 @@ public class WorkOrderService {
         List<WorkOrder> all = workOrderRepository.findAll();
         return all.stream().collect(Collectors.groupingBy(WorkOrder::getStatus));
     }
+    
+    public List<WorkOrderStatusHistory> getStatusHistory(Long workOrderId) {
+        return historyRepository.findByWorkOrderIdOrderByCreatedAtDesc(workOrderId);
+    }
 }

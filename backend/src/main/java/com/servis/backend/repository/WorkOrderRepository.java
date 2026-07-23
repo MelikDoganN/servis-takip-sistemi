@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface WorkOrderRepository extends JpaRepository<WorkOrder, Long> {
@@ -14,4 +15,5 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrder, Long> {
     
     // YENİ: Sayfalama destekli metot (11. gün)
     Page<WorkOrder> findByStatus(String status, Pageable pageable);
+    List<WorkOrder> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 }

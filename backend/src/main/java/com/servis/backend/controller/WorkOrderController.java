@@ -2,6 +2,7 @@ package com.servis.backend.controller;
 
 import com.servis.backend.entity.User;
 import com.servis.backend.entity.WorkOrder;
+import com.servis.backend.entity.WorkOrderStatusHistory;
 import com.servis.backend.service.UserService;
 import com.servis.backend.service.WorkOrderService;
 import jakarta.validation.Valid;
@@ -86,8 +87,8 @@ public class WorkOrderController {
     }
 
     // 7. İŞ EMRİ DURUM GEÇMİŞİ (13. Gün)
- /*   @GetMapping("/{id}/history")
+    @GetMapping("/{id}/history")
     public ResponseEntity<List<WorkOrderStatusHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(workOrderService.getStatusHistory(id));
-    }*/
+    }
 }
