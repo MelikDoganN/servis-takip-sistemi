@@ -25,20 +25,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private UserDetailsService userDetailsService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/auth/") || 
+               path.startsWith("/h2-console/") ||
+               path.startsWith("/api/workorders/") ||
+               path.startsWith("/api/warranty/");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Önce path kontrolü (en başta!)
-        String path = request.getRequestURI();
-        if (path.startsWith("/auth/") || path.startsWith("/h2-console/")) {
-            // Bu yollar için filtreyi tamamen atla
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // 2. Authorization header'ını al
+        // 1. Authorization header'ını al
         final String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -46,7 +47,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 3. Token'ı doğrula
+        // 2. Token'ı doğrula
         final String token = authHeader.substring(7);
         try {
             final String username = jwtService.extractUsername(token);
@@ -60,11 +61,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
-            // Token geçersizse logla ama zincire devam et
             System.out.println("JWT hatası: " + e.getMessage());
         }
 
-        // 4. Zinciri devam ettir
+        // 3. Zinciri devam ettir
         filterChain.doFilter(request, response);
     }
 }

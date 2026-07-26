@@ -2,9 +2,15 @@ package com.servis.backend.controller;
 
 import com.servis.backend.entity.User;
 import com.servis.backend.entity.WorkOrder;
+import com.servis.backend.entity.WorkOrderAttachment;
 import com.servis.backend.entity.WorkOrderStatusHistory;
+import com.servis.backend.security.JwtService;
+import com.servis.backend.service.PdfService;
 import com.servis.backend.service.UserService;
+import com.servis.backend.service.WorkOrderAttachmentService;
 import com.servis.backend.service.WorkOrderService;
+
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -16,7 +22,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -28,8 +36,16 @@ public class WorkOrderController {
     private WorkOrderService workOrderService;
 
     @Autowired
-    private UserService userService; // 4. adımda eklendi
+    private UserService userService;
 
+    @Autowired
+    private WorkOrderAttachmentService attachmentService;
+
+    @Autowired
+    private PdfService pdfService;
+   
+    @Autowired
+    private JwtService jwtService;
     // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün
     @GetMapping
     public Page<WorkOrder> getAll(
@@ -60,18 +76,17 @@ public class WorkOrderController {
         return new ResponseEntity<>(workOrderService.createWorkOrder(workOrder), HttpStatus.CREATED);
     }
 
-    // 4. DURUM GÜNCELLE (State Machine)
+    // 4. DURUM GÜNCELLE (State Machine - 8. Gün)
     @PutMapping("/{id}/status")
     public ResponseEntity<WorkOrder> updateStatus(
             @PathVariable Long id,
             @RequestParam String status,
             @RequestParam(defaultValue = "WEB") String channel,
             @AuthenticationPrincipal UserDetails userDetails) {
-        // userDetails'ten User entity'sine çevirme işlemi sonra yapılacak, şimdilik null
         return ResponseEntity.ok(workOrderService.updateStatus(id, status, null, channel));
     }
 
-    // 5. TEKNİSYEN ATA
+    // 5. TEKNİSYEN ATA (9. Gün)
     @PutMapping("/{id}/assign/{technicianId}")
     public ResponseEntity<WorkOrder> assignTechnician(
             @PathVariable Long id,
@@ -80,15 +95,57 @@ public class WorkOrderController {
         return ResponseEntity.ok(workOrderService.assignTechnician(id, technicianId, null));
     }
 
-    // 6. KANBAN PANOSU (Duruma göre gruplama - 12. Gün)
+    // 6. KANBAN PANOSU (12. Gün)
     @GetMapping("/kanban")
     public Map<String, List<WorkOrder>> getKanban() {
         return workOrderService.getKanbanGroupedByStatus();
     }
 
-    // 7. İŞ EMRİ DURUM GEÇMİŞİ (13. Gün)
+    // 7. DURUM GEÇMİŞİ (13. Gün)
     @GetMapping("/{id}/history")
     public ResponseEntity<List<WorkOrderStatusHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(workOrderService.getStatusHistory(id));
+    }
+
+    // 8. FOTOĞRAF YÜKLE (14. Gün)
+    @PostMapping("/{id}/upload")
+    public ResponseEntity<WorkOrderAttachment> uploadFile(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal UserDetails userDetails,
+            HttpServletRequest request) throws IOException {
+
+        User currentUser;
+        if (userDetails != null) {
+            currentUser = userService.findByEmail(userDetails.getUsername());
+        } else {
+            // Token'dan kullanıcıyı manuel çek
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                throw new RuntimeException("Token bulunamadı veya geçersiz");
+            }
+            String token = authHeader.substring(7);
+            String username = jwtService.extractUsername(token);
+            currentUser = userService.findByEmail(username);
+        }
+        
+        WorkOrderAttachment attachment = attachmentService.uploadFile(id, file, currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(attachment);
+    }
+
+    // 9. İŞ EMRİNE AİT TÜM FOTOĞRAFLARI LİSTELE (14. Gün)
+    @GetMapping("/{id}/attachments")
+    public ResponseEntity<List<WorkOrderAttachment>> getAttachments(@PathVariable Long id) {
+        return ResponseEntity.ok(attachmentService.getAttachmentsByWorkOrderId(id));
+    }
+
+    // 10. PDF ÇIKTISI OLUŞTUR (14. Gün)
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<byte[]> generatePdf(@PathVariable Long id) throws Exception {
+        byte[] pdf = pdfService.generateWorkOrderPdf(id);
+        return ResponseEntity.ok()
+                .header("Content-Type", "application/pdf")
+                .header("Content-Disposition", "attachment; filename=workorder_" + id + ".pdf")
+                .body(pdf);
     }
 }

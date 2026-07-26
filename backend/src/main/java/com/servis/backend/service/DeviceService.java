@@ -36,7 +36,10 @@ public class DeviceService {
         }
         return deviceRepository.save(device);
     }
-
+    public Device getDeviceBySerialNumber(String serialNumber) {
+        return deviceRepository.findBySerialNumber(serialNumber)
+                .orElse(null);
+    }
     public Device updateDevice(Long id, Device deviceDetails) {
         Device existing = getDeviceById(id);
         existing.setCustomer(deviceDetails.getCustomer());

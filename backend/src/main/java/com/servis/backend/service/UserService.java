@@ -15,4 +15,10 @@ public class UserService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı: " + email));
     }
+    public User findById(Long id) {
+            return userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı: " + id));
+    
+        
+    }
 }
