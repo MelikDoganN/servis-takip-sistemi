@@ -29,11 +29,9 @@ import {
 } from "@/types/user";
 import {
   MANAGEABLE_ROLES,
-  BackendRoleName,
   normalizeRoleName,
   roleLabel,
 } from "@/types/role";
-import { getAuthEmail } from "@/lib/auth";
 import { formatDateTime } from "@/lib/utils";
 
 interface FormErrors {
@@ -65,7 +63,6 @@ function roleBadgeVariant(
 
 export default function KullaniciYonetimiPage() {
   const toast = useToast();
-  const authEmail = getAuthEmail();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,9 +91,7 @@ export default function KullaniciYonetimiPage() {
       const apiErr = err as ApiError;
       if (apiErr.status === 403) {
         setForbidden(true);
-        setError(
-          "Bu işlem için ADMIN yetkisi gerekir. (/api/users → hasRole('ADMIN'), authority: ROLE_ADMIN)"
-        );
+        setError("Bu işlem için yönetici yetkisi gerekir.");
       } else if (apiErr.status === 401) {
         setError("Oturum doğrulaması gerekli. Lütfen tekrar giriş yapın.");
       } else {
@@ -174,7 +169,7 @@ export default function KullaniciYonetimiPage() {
     } catch (err) {
       const apiErr = err as ApiError;
       if (apiErr.status === 403) {
-        setFormError("Yalnızca ADMIN kullanıcı oluşturabilir.");
+        setFormError("Bu işlem için yönetici yetkisi gerekir.");
       } else {
         setFormError(apiErr.message || "Kullanıcı oluşturulamadı");
       }
@@ -187,13 +182,13 @@ export default function KullaniciYonetimiPage() {
     <div className="space-y-6 sm:space-y-8">
       <PageHeader
         title="Kullanıcı Yönetimi"
-        description="Admin paneli — GET/POST /api/users (ROLE_ADMIN gerekir)"
+        description="Sistem kullanıcılarını görüntüleyin ve yeni kayıt oluşturun"
         icon={<UserCog className="h-5 w-5" />}
         action={
           <Button
             onClick={() => setModalOpen(true)}
             disabled={forbidden}
-            title={forbidden ? "ADMIN yetkisi gerekli" : undefined}
+            title={forbidden ? "Yönetici yetkisi gerekli" : undefined}
           >
             <Plus className="mr-1.5 h-4 w-4" />
             Yeni Kullanıcı
@@ -201,20 +196,13 @@ export default function KullaniciYonetimiPage() {
         }
       />
 
-      {authEmail && (
-        <p className="text-xs text-slate-500">
-          Oturum (JWT subject): <span className="font-medium text-slate-700">{authEmail}</span>
-          {" · "}Rol claim JWT’de yok; yetki sunucuda kontrol edilir.
-        </p>
-      )}
-
       {error && <ErrorMessage message={error} />}
 
       {forbidden ? (
         <SectionCard title="Yetki Gerekli">
           <EmptyState
-            title="ADMIN erişimi gerekli"
-            description="Bu ekran @PreAuthorize(hasRole('ADMIN')) korumalıdır. ROLE_ADMIN yetkili bir hesapla giriş yapın."
+            title="Erişim yetkiniz yok"
+            description="Bu sayfayı görüntülemek için yönetici yetkisine sahip bir hesapla giriş yapın."
           />
         </SectionCard>
       ) : (
@@ -354,17 +342,13 @@ export default function KullaniciYonetimiPage() {
             >
               {MANAGEABLE_ROLES.map((r) => (
                 <option key={r} value={r}>
-                  {roleLabel(r)} ({r})
+                  {roleLabel(r)}
                 </option>
               ))}
             </select>
             {errors.role && (
               <p className="mt-1.5 text-sm text-red-600">{errors.role}</p>
             )}
-            <p className="mt-1 text-xs text-slate-400">
-              Backend role adı (ROLE_ prefix yok). Security authority: ROLE_
-              {(role as BackendRoleName) || "…"}
-            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

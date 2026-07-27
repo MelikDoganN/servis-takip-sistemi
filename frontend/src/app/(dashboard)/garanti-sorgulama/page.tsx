@@ -142,12 +142,11 @@ export default function GarantiSorgulamaPage() {
 
               <Input
                 label="IMEI"
-                placeholder="IMEI numarası (bilgi alanı; API alanı değil)"
+                placeholder="IMEI numarası"
                 value={imei}
                 onChange={(e) => setImei(e.target.value)}
                 disabled
               />
-              <p className="text-xs text-slate-500">IMEI alanı görsel amaçlıdır; backend bu alanı kabul etmez.</p>
 
               <div className="flex flex-wrap gap-3">
                 <Button variant="outline" onClick={handleSerialSearch} disabled={!serialNumber.trim()}>
@@ -292,7 +291,7 @@ export default function GarantiSorgulamaPage() {
         <SectionCard title="Son Sorgular" description="Geçmiş sorgu kayıtları">
           <EmptyState
             title="Veri yok"
-            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+            description="Geçmiş sorgular yakında burada görüntülenecek"
           />
         </SectionCard>
       </div>

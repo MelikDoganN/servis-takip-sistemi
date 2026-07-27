@@ -86,9 +86,8 @@ export function DeviceForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        Marka ve model listesi için backend API henüz yok. Cihaz kaydı, veritabanında
-        halihazırda bulunan bir <strong>model ID</strong> ile yapılmalıdır. Uydurma
-        marka/model gönderilmez.
+        Marka ve model seçimi henüz aktif değil. Kayıt için geçerli bir{" "}
+        <strong>model ID</strong> girilmelidir.
       </div>
 
       <div className="w-full">

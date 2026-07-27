@@ -14,13 +14,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary-600 text-white shadow-soft hover:bg-primary-700 hover:shadow-card active:scale-[0.98] focus-visible:ring-primary-500",
+    "bg-navy text-white shadow-soft hover:bg-primary-800 hover:shadow-card active:scale-[0.98] focus-visible:ring-accent",
   secondary:
-    "bg-slate-800 text-white shadow-soft hover:bg-slate-900 hover:shadow-card active:scale-[0.98] focus-visible:ring-slate-500",
+    "bg-accent text-white shadow-soft hover:bg-accent-strong hover:shadow-card active:scale-[0.98] focus-visible:ring-accent",
   outline:
-    "border border-slate-200 bg-white text-slate-700 shadow-soft hover:border-slate-300 hover:bg-slate-50 hover:shadow-card active:scale-[0.98] focus-visible:ring-primary-500",
+    "border border-slate-200 bg-white text-navy shadow-soft hover:border-accent/40 hover:bg-accent-soft hover:shadow-card active:scale-[0.98] focus-visible:ring-accent",
   ghost:
-    "text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:scale-[0.98] focus-visible:ring-slate-400",
+    "text-navy/80 hover:bg-primary-50 hover:text-navy active:scale-[0.98] focus-visible:ring-primary-300",
   danger:
     "bg-red-600 text-white shadow-soft hover:bg-red-700 hover:shadow-card active:scale-[0.98] focus-visible:ring-red-500",
 };

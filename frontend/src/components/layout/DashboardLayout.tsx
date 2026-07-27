@@ -2,6 +2,7 @@
 
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { PageTransition } from "./PageTransition";
 import { SidebarProvider, useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
       {isOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={close} />
+          <div
+            className="absolute inset-0 bg-navy-deep/50 backdrop-blur-sm animate-fade-in"
+            onClick={close}
+          />
           <div
             className={cn(
               "absolute inset-y-0 left-0 shadow-elevated transition-transform duration-300",
@@ -29,7 +33,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-64">
         <Header />
         <main className="p-4 sm:p-6 lg:p-8">
-          <div className="page-shell">{children}</div>
+          <div className="page-shell">
+            <PageTransition>{children}</PageTransition>
+          </div>
         </main>
       </div>
     </div>

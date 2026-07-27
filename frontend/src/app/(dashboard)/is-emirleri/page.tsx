@@ -518,7 +518,7 @@ export default function IsEmirleriPage() {
       {view === "kanban" && (
         <SectionCard
           title="Kanban"
-          description="GET /api/workorders/kanban — duruma göre gruplama"
+          description="İş emirlerini duruma göre görüntüleyin"
         >
           {loading ? (
             <SkeletonTable rows={4} />
@@ -639,9 +639,6 @@ export default function IsEmirleriPage() {
               onChange={(e) => setCreatedById(e.target.value)}
               required
             />
-            <p className="mt-1 text-xs text-slate-400">
-              Backend `createdBy` zorunlu; login yanıtında user id yok.
-            </p>
           </div>
 
           <div>
@@ -831,7 +828,7 @@ export default function IsEmirleriPage() {
               >
                 {(WORK_ORDER_TRANSITIONS[selected.status] ?? []).map((s) => (
                   <option key={s} value={s}>
-                    {WORK_ORDER_STATUS_LABELS[s]} ({s})
+                    {WORK_ORDER_STATUS_LABELS[s]}
                   </option>
                 ))}
               </select>
@@ -881,7 +878,7 @@ export default function IsEmirleriPage() {
             ) : availableTechnicians.length === 0 ? (
               <EmptyState
                 title="Müsait teknisyen yok"
-                description="GET /api/technicians/available sonucunda kayıt bulunamadı"
+                description="Şu an atama yapılabilecek müsait teknisyen bulunmuyor"
               />
             ) : (
               <div>

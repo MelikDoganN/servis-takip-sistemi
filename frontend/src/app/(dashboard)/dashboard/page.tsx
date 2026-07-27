@@ -114,21 +114,21 @@ export default function DashboardPage() {
         <KpiCard
           label="Açık İş Emri"
           value={stats?.openWorkOrders ?? 0}
-          description="Durum: OPEN"
+          description="Bekleyen iş emirleri"
           iconBg="bg-amber-50 text-amber-600"
           icon={<CircleDot className="h-6 w-6" />}
         />
         <KpiCard
           label="Çözülen"
           value={stats?.resolvedWorkOrders ?? 0}
-          description="Durum: RESOLVED"
+          description="Tamamlanan iş emirleri"
           iconBg="bg-teal-50 text-teal-600"
           icon={<CheckCircle2 className="h-6 w-6" />}
         />
         <KpiCard
           label="Kapatılan"
           value={stats?.closedWorkOrders ?? 0}
-          description="Durum: CLOSED"
+          description="Kapatılan iş emirleri"
           iconBg="bg-slate-100 text-slate-600"
           icon={<XCircle className="h-6 w-6" />}
         />
@@ -163,21 +163,21 @@ export default function DashboardPage() {
         <SectionCard title="Son Aktiviteler" description="Sistemdeki son hareketler">
           <EmptyState
             title="Veri yok"
-            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+            description="Yakında burada görüntülenecek"
           />
         </SectionCard>
 
         <SectionCard title="Yaklaşan Teslimatlar" description="Parça ve cihaz teslim takibi">
           <EmptyState
             title="Veri yok"
-            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+            description="Yakında burada görüntülenecek"
           />
         </SectionCard>
 
         <SectionCard title="Kritik Durumlar" description="Acil müdahale gerektiren kayıtlar">
           <EmptyState
             title="Veri yok"
-            description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+            description="Yakında burada görüntülenecek"
             icon={<AlertTriangle className="h-7 w-7 text-amber-500" strokeWidth={1.5} />}
           />
         </SectionCard>

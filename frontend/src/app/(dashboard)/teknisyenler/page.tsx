@@ -397,7 +397,7 @@ export default function TeknisyenlerPage() {
                 }
               />
               <p className="mt-1 text-xs text-slate-400">
-                Backend `user` zorunlu; önce kullanıcı kaydı oluşturulmalı.
+                Önce kullanıcı kaydı oluşturulmalıdır.
               </p>
             </div>
 

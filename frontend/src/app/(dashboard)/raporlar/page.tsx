@@ -28,7 +28,7 @@ export default function RaporlarPage() {
       <SectionCard title="Rapor Paneli">
         <EmptyState
           title="Modül henüz aktif değil"
-          description="Bu modül backend API'si tamamlandığında aktif olacaktır"
+          description="Raporlar yakında burada görüntülenecek"
         />
       </SectionCard>
     </div>

@@ -1,5 +1,9 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * MTÜ kurumsal kimlik referansı:
+ * Lacivert #262F59 · Turkuaz #12A7CD · Beyaz
+ */
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,34 +14,47 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#1d4ed8",
-          700: "#1e40af",
-          800: "#1e3a8a",
-          900: "#0f172a",
+          50: "#eef8fc",
+          100: "#d5eef7",
+          200: "#a9dceb",
+          300: "#6ec4dc",
+          400: "#2eb0d4",
+          500: "#12A7CD",
+          600: "#0e8fb0",
+          700: "#262F59",
+          800: "#1e2648",
+          900: "#161c36",
+        },
+        navy: {
+          DEFAULT: "#262F59",
+          soft: "#2f3a6b",
+          deep: "#1a203d",
+          muted: "#3d4870",
+        },
+        accent: {
+          DEFAULT: "#12A7CD",
+          soft: "#e8f7fb",
+          strong: "#0d8eae",
         },
         surface: {
-          DEFAULT: "#f8fafc",
-          muted: "#f1f5f9",
+          DEFAULT: "#f4f7fb",
+          muted: "#e8eef5",
           card: "#ffffff",
         },
         sidebar: {
-          DEFAULT: "#0b1220",
-          hover: "#152033",
-          active: "#1e3a8a",
-          border: "rgba(148,163,184,0.12)",
+          DEFAULT: "#1a203d",
+          hover: "#262F59",
+          active: "#12A7CD",
+          border: "rgba(18,167,205,0.18)",
         },
       },
       boxShadow: {
-        soft: "0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06)",
-        card: "0 1px 2px rgb(15 23 42 / 0.04), 0 4px 12px rgb(15 23 42 / 0.04)",
-        elevated: "0 8px 24px rgb(15 23 42 / 0.08), 0 2px 6px rgb(15 23 42 / 0.04)",
-        glow: "0 0 0 3px rgb(37 99 235 / 0.15)",
+        soft: "0 1px 2px rgb(38 47 89 / 0.04), 0 1px 3px rgb(38 47 89 / 0.06)",
+        card: "0 1px 2px rgb(38 47 89 / 0.04), 0 6px 16px rgb(38 47 89 / 0.06)",
+        elevated:
+          "0 10px 28px rgb(38 47 89 / 0.10), 0 2px 8px rgb(38 47 89 / 0.05)",
+        glow: "0 0 0 3px rgb(18 167 205 / 0.22)",
+        "sidebar-glow": "0 0 24px rgb(18 167 205 / 0.25)",
       },
       borderRadius: {
         xl: "0.875rem",
@@ -52,12 +69,20 @@ const config: Config = {
           "100%": { opacity: "1" },
         },
         "slide-up": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "slide-in-right": {
           "0%": { opacity: "0", transform: "translateX(16px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        "page-enter": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "nav-indicator": {
+          "0%": { transform: "scaleY(0.4)", opacity: "0.4" },
+          "100%": { transform: "scaleY(1)", opacity: "1" },
         },
         "scale-in": {
           "0%": { opacity: "0", transform: "scale(0.96)" },
@@ -73,20 +98,22 @@ const config: Config = {
         },
       },
       animation: {
-        "fade-in": "fade-in 0.25s ease-out",
-        "slide-up": "slide-up 0.3s ease-out",
-        "slide-in-right": "slide-in-right 0.3s ease-out",
+        "fade-in": "fade-in 0.28s ease-out",
+        "slide-up": "slide-up 0.35s ease-out",
+        "slide-in-right": "slide-in-right 0.32s ease-out",
+        "page-enter": "page-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
+        "nav-indicator": "nav-indicator 0.28s ease-out",
         "scale-in": "scale-in 0.2s ease-out",
         "toast-progress": "toast-progress 4s linear forwards",
         shimmer: "shimmer 1.6s ease-in-out infinite",
       },
       fontFamily: {
         sans: [
+          "Segoe UI",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
-          "Segoe UI",
           "Helvetica Neue",
           "Arial",
           "Noto Sans",

@@ -90,23 +90,23 @@ export function LoginForm() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary-700/40 via-slate-950 to-slate-950" />
-      <div className="pointer-events-none absolute -left-24 top-24 h-72 w-72 rounded-full bg-primary-600/20 blur-3xl" />
-      <div className="pointer-events-none absolute -right-24 bottom-10 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-navy-deep px-4">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-accent/30 via-navy to-navy-deep" />
+      <div className="pointer-events-none absolute -left-24 top-24 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 bottom-10 h-72 w-72 rounded-full bg-primary-500/15 blur-3xl" />
 
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-800 shadow-elevated">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-navy shadow-elevated ring-2 ring-white/20">
             <Settings2 className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">Servis Takip Sistemi</h1>
-          <p className="mt-2 text-sm text-slate-300">
-            {mode === "login" ? "Yönetim paneline giriş yapın" : "Yeni hesap oluşturun"}
+          <p className="mt-2 text-sm text-primary-100/80">
+            {mode === "login" ? "Kurumsal yönetim paneline giriş yapın" : "Yeni hesap oluşturun"}
           </p>
         </div>
 
-        <Card className="border-slate-200/20 bg-white/95 shadow-elevated backdrop-blur">
+        <Card className="border-white/15 bg-white/95 shadow-elevated backdrop-blur">
           <CardContent className="py-6">
             <form onSubmit={handleSubmit} className="space-y-5" noValidate>
               {apiError && <ErrorMessage message={apiError} />}
@@ -171,7 +171,7 @@ export function LoginForm() {
                     Hesabınız yok mu?{" "}
                     <button
                       type="button"
-                      className="font-medium text-primary-600 transition hover:text-primary-700"
+                      className="font-medium text-accent-strong transition hover:text-navy"
                       onClick={() => {
                         setMode("register");
                         setApiError("");
@@ -186,7 +186,7 @@ export function LoginForm() {
                     Zaten hesabınız var mı?{" "}
                     <button
                       type="button"
-                      className="font-medium text-primary-600 transition hover:text-primary-700"
+                      className="font-medium text-accent-strong transition hover:text-navy"
                       onClick={() => {
                         setMode("login");
                         setApiError("");
