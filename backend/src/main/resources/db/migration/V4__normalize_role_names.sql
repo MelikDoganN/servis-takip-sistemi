@@ -1,6 +1,58 @@
--- Mevcut ROLE_ önekli kayıtları standart isimlere çevir (idempotent)
-UPDATE roles SET name = 'ADMIN' WHERE name = 'ROLE_ADMIN';
-UPDATE roles SET name = 'REGION_MANAGER' WHERE name = 'ROLE_REGION_MANAGER';
-UPDATE roles SET name = 'CENTER_OPERATOR' WHERE name = 'ROLE_CENTER_OPERATOR';
-UPDATE roles SET name = 'TECHNICIAN' WHERE name = 'ROLE_TECHNICIAN';
-UPDATE roles SET name = 'CUSTOMER' WHERE name = 'ROLE_CUSTOMER';
+-- ROLE_ önekli kayıtları standart isimlere çevir (idempotent).
+-- Hedef isim zaten varsa: kullanıcıları hedef role taşı, eski ROLE_* satırını sil.
+-- Hedef yoksa: ROLE_* satırını yeniden adlandır.
+
+-- ADMIN
+UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'ADMIN')
+WHERE role_id IN (SELECT id FROM roles WHERE name = 'ROLE_ADMIN')
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'ADMIN');
+DELETE FROM roles
+WHERE name = 'ROLE_ADMIN'
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'ADMIN');
+UPDATE roles SET name = 'ADMIN'
+WHERE name = 'ROLE_ADMIN'
+  AND NOT EXISTS (SELECT 1 FROM roles WHERE name = 'ADMIN');
+
+-- REGION_MANAGER
+UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'REGION_MANAGER')
+WHERE role_id IN (SELECT id FROM roles WHERE name = 'ROLE_REGION_MANAGER')
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'REGION_MANAGER');
+DELETE FROM roles
+WHERE name = 'ROLE_REGION_MANAGER'
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'REGION_MANAGER');
+UPDATE roles SET name = 'REGION_MANAGER'
+WHERE name = 'ROLE_REGION_MANAGER'
+  AND NOT EXISTS (SELECT 1 FROM roles WHERE name = 'REGION_MANAGER');
+
+-- CENTER_OPERATOR
+UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'CENTER_OPERATOR')
+WHERE role_id IN (SELECT id FROM roles WHERE name = 'ROLE_CENTER_OPERATOR')
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'CENTER_OPERATOR');
+DELETE FROM roles
+WHERE name = 'ROLE_CENTER_OPERATOR'
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'CENTER_OPERATOR');
+UPDATE roles SET name = 'CENTER_OPERATOR'
+WHERE name = 'ROLE_CENTER_OPERATOR'
+  AND NOT EXISTS (SELECT 1 FROM roles WHERE name = 'CENTER_OPERATOR');
+
+-- TECHNICIAN
+UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'TECHNICIAN')
+WHERE role_id IN (SELECT id FROM roles WHERE name = 'ROLE_TECHNICIAN')
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'TECHNICIAN');
+DELETE FROM roles
+WHERE name = 'ROLE_TECHNICIAN'
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'TECHNICIAN');
+UPDATE roles SET name = 'TECHNICIAN'
+WHERE name = 'ROLE_TECHNICIAN'
+  AND NOT EXISTS (SELECT 1 FROM roles WHERE name = 'TECHNICIAN');
+
+-- CUSTOMER
+UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'CUSTOMER')
+WHERE role_id IN (SELECT id FROM roles WHERE name = 'ROLE_CUSTOMER')
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'CUSTOMER');
+DELETE FROM roles
+WHERE name = 'ROLE_CUSTOMER'
+  AND EXISTS (SELECT 1 FROM roles WHERE name = 'CUSTOMER');
+UPDATE roles SET name = 'CUSTOMER'
+WHERE name = 'ROLE_CUSTOMER'
+  AND NOT EXISTS (SELECT 1 FROM roles WHERE name = 'CUSTOMER');
