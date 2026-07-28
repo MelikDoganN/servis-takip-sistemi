@@ -31,12 +31,14 @@ export interface JwtPayload {
   sub?: string;
   exp?: number;
   iat?: number;
+  /** Spring authority listesi, örn. ["ROLE_ADMIN"] */
+  roles?: string[];
   [key: string]: unknown;
 }
 
 /**
- * Backend JwtService yalnızca subject=email koyuyor; rol claim yok.
- * Rol yetkisi sunucuda ROLE_{name} authority ile kontrol edilir.
+ * Backend JwtService: subject=email + roles claim (authority formatı).
+ * Yetki kontrolü sunucuda yapılır; bu yardımcılar yalnızca UI içindir.
  */
 export function parseJwtPayload(token: string): JwtPayload | null {
   try {
@@ -67,6 +69,23 @@ export function getTokenPayload(): JwtPayload | null {
 export function getAuthEmail(): string | null {
   const payload = getTokenPayload();
   return typeof payload?.sub === "string" ? payload.sub : null;
+}
+
+/**
+ * JWT `roles` claim → ["ROLE_ADMIN", ...].
+ * Claim yoksa / geçersizse boş dizi (güvenli varsayılan).
+ */
+export function getAuthRoles(): string[] {
+  const payload = getTokenPayload();
+  const raw = payload?.roles;
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
+    .map((r) => {
+      const trimmed = r.trim();
+      return trimmed.startsWith("ROLE_") ? trimmed : `ROLE_${trimmed}`;
+    });
 }
 
 export function isTokenExpired(): boolean {

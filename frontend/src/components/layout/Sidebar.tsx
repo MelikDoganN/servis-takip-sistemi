@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { navItems } from "@/config/navigation";
 import { useSidebar } from "@/hooks/useSidebar";
+import { getAuthRoles } from "@/lib/auth";
 
 interface SidebarProps {
   mobile?: boolean;
@@ -14,6 +16,19 @@ interface SidebarProps {
 export function Sidebar({ mobile = false }: SidebarProps) {
   const pathname = usePathname();
   const { close } = useSidebar();
+  const [roles, setRoles] = useState<string[]>([]);
+
+  useEffect(() => {
+    setRoles(getAuthRoles());
+  }, []);
+
+  const visibleItems = useMemo(() => {
+    // Rol claim yoksa menü gösterme (güvenli varsayılan)
+    if (roles.length === 0) return [];
+    return navItems.filter((item) =>
+      item.roles.some((allowed) => roles.includes(allowed))
+    );
+  }, [roles]);
 
   const content = (
     <>
@@ -39,44 +54,50 @@ export function Sidebar({ mobile = false }: SidebarProps) {
         <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary-300/70">
           Ana Menü
         </p>
-        <ul className="space-y-1.5">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={mobile ? close : undefined}
-                  className={cn(
-                    "group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium",
-                    "transition-all duration-300 ease-out",
-                    isActive
-                      ? "nav-link-active"
-                      : "text-slate-300 hover:bg-sidebar-hover hover:text-white hover:translate-x-0.5"
-                  )}
-                >
-                  {isActive && (
-                    <span className="absolute inset-y-1.5 left-0 w-1 origin-center rounded-r-full bg-accent animate-nav-indicator shadow-[0_0_10px_rgba(18,167,205,0.8)]" />
-                  )}
-                  <span
+        {visibleItems.length === 0 ? (
+          <p className="px-3 text-xs text-slate-500">
+            Bu hesap için görüntülenecek menü bulunmuyor.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {visibleItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={mobile ? close : undefined}
                     className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300",
+                      "group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium",
+                      "transition-all duration-300 ease-out",
                       isActive
-                        ? "bg-accent/30 text-white scale-105"
-                        : "bg-white/5 text-slate-400 group-hover:bg-white/10 group-hover:text-accent"
+                        ? "nav-link-active"
+                        : "text-slate-300 hover:bg-sidebar-hover hover:text-white hover:translate-x-0.5"
                     )}
                   >
-                    {item.icon}
-                  </span>
-                  <span className="relative">{item.label}</span>
-                  {isActive && (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    {isActive && (
+                      <span className="absolute inset-y-1.5 left-0 w-1 origin-center rounded-r-full bg-accent animate-nav-indicator shadow-[0_0_10px_rgba(18,167,205,0.8)]" />
+                    )}
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300",
+                        isActive
+                          ? "bg-accent/30 text-white scale-105"
+                          : "bg-white/5 text-slate-400 group-hover:bg-white/10 group-hover:text-accent"
+                      )}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="relative">{item.label}</span>
+                    {isActive && (
+                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </nav>
 
       <div className="border-t border-sidebar-border bg-navy-deep/40 px-5 py-4">
