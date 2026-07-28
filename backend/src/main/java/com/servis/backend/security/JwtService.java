@@ -7,8 +7,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -33,6 +35,14 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
+    public List<String> extractRoles(String token) {
+        Object roles = extractAllClaims(token).get("roles");
+        if (roles instanceof List<?> list) {
+            return list.stream().map(String::valueOf).toList();
+        }
+        return List.of();
+    }
+
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSignKey())
@@ -51,7 +61,12 @@ public class JwtService {
     }
 
     public String generateToken(String username) {
+        return generateToken(username, List.of());
+    }
+
+    public String generateToken(String username, Collection<String> roles) {
         Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", List.copyOf(roles));
         return createToken(claims, username);
     }
 
