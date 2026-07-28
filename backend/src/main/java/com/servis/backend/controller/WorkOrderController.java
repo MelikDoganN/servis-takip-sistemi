@@ -4,13 +4,11 @@ import com.servis.backend.entity.User;
 import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.entity.WorkOrderAttachment;
 import com.servis.backend.entity.WorkOrderStatusHistory;
-import com.servis.backend.security.JwtService;
+import com.servis.backend.security.WorkOrderAccessGuard;
 import com.servis.backend.service.PdfService;
-import com.servis.backend.service.UserService;
 import com.servis.backend.service.WorkOrderAttachmentService;
 import com.servis.backend.service.WorkOrderService;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -19,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -36,16 +35,13 @@ public class WorkOrderController {
     private WorkOrderService workOrderService;
 
     @Autowired
-    private UserService userService;
-
-    @Autowired
     private WorkOrderAttachmentService attachmentService;
 
     @Autowired
     private PdfService pdfService;
-   
+
     @Autowired
-    private JwtService jwtService;
+    private WorkOrderAccessGuard workOrderAccessGuard;
     // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün
     @GetMapping
     public Page<WorkOrder> getAll(
@@ -67,11 +63,11 @@ public class WorkOrderController {
         return ResponseEntity.ok(workOrderService.getWorkOrderById(id));
     }
 
-    // 3. YENİ İŞ EMRİ OLUŞTUR (createdBy otomatik - 4. Adım)
+    // 3. YENİ İŞ EMRİ OLUŞTUR — createdBy JWT principal'dan alınır
     @PostMapping
     public ResponseEntity<WorkOrder> create(@Valid @RequestBody WorkOrder workOrder,
                                             @AuthenticationPrincipal UserDetails userDetails) {
-        User currentUser = userService.findByEmail(userDetails.getUsername());
+        User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
         workOrder.setCreatedBy(currentUser);
         return new ResponseEntity<>(workOrderService.createWorkOrder(workOrder), HttpStatus.CREATED);
     }
@@ -82,8 +78,12 @@ public class WorkOrderController {
             @PathVariable Long id,
             @RequestParam String status,
             @RequestParam(defaultValue = "WEB") String channel,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(workOrderService.updateStatus(id, status, null, channel));
+            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication) {
+        User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
+        WorkOrder existing = workOrderService.getWorkOrderById(id);
+        workOrderAccessGuard.assertCanModify(existing, authentication);
+        return ResponseEntity.ok(workOrderService.updateStatus(id, status, currentUser, channel));
     }
 
     // 5. TEKNİSYEN ATA (9. Gün)
@@ -91,8 +91,12 @@ public class WorkOrderController {
     public ResponseEntity<WorkOrder> assignTechnician(
             @PathVariable Long id,
             @PathVariable Long technicianId,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(workOrderService.assignTechnician(id, technicianId, null));
+            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication) {
+        User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
+        WorkOrder existing = workOrderService.getWorkOrderById(id);
+        workOrderAccessGuard.assertCanModify(existing, authentication);
+        return ResponseEntity.ok(workOrderService.assignTechnician(id, technicianId, currentUser));
     }
 
     // 6. KANBAN PANOSU (12. Gün)
@@ -112,23 +116,8 @@ public class WorkOrderController {
     public ResponseEntity<WorkOrderAttachment> uploadFile(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal UserDetails userDetails,
-            HttpServletRequest request) throws IOException {
-
-        User currentUser;
-        if (userDetails != null) {
-            currentUser = userService.findByEmail(userDetails.getUsername());
-        } else {
-            // Token'dan kullanıcıyı manuel çek
-            String authHeader = request.getHeader("Authorization");
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                throw new RuntimeException("Token bulunamadı veya geçersiz");
-            }
-            String token = authHeader.substring(7);
-            String username = jwtService.extractUsername(token);
-            currentUser = userService.findByEmail(username);
-        }
-        
+            @AuthenticationPrincipal UserDetails userDetails) throws IOException {
+        User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
         WorkOrderAttachment attachment = attachmentService.uploadFile(id, file, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(attachment);
     }

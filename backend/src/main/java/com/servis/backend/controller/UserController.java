@@ -4,6 +4,7 @@ import com.servis.backend.entity.Role;
 import com.servis.backend.entity.User;
 import com.servis.backend.repository.RoleRepository;
 import com.servis.backend.repository.UserRepository;
+import com.servis.backend.security.RoleNames;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -26,6 +28,9 @@ public class UserController {
     @Autowired
     private RoleRepository roleRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @GetMapping
     public ResponseEntity<Page<User>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
@@ -40,14 +45,12 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<?> createUser(@RequestBody Map<String, String> userData) {
-        String roleName = userData.get("role");
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new RuntimeException("Rol bulunamadı: " + roleName));
+        Role role = resolveRole(userData.get("role"));
 
         User user = new User();
         user.setFullName(userData.get("fullName"));
         user.setEmail(userData.get("email"));
-        user.setPasswordHash(userData.get("password"));
+        user.setPasswordHash(passwordEncoder.encode(userData.get("password")));
         user.setPhone(userData.get("phone"));
         user.setIsActive(true);
         user.setRole(role);
@@ -66,9 +69,15 @@ public class UserController {
     public ResponseEntity<User> updateUserRole(@PathVariable Long id, @RequestBody Map<String, String> roleData) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
-        Role role = roleRepository.findByName(roleData.get("role"))
-                .orElseThrow(() -> new RuntimeException("Rol bulunamadı"));
-        user.setRole(role);
+        user.setRole(resolveRole(roleData.get("role")));
         return ResponseEntity.ok(userRepository.save(user));
+    }
+
+    /** ADMIN veya ROLE_ADMIN kabul eder; DB'de ADMIN saklanır. */
+    private Role resolveRole(String roleName) {
+        String dbName = RoleNames.toDbName(roleName);
+        return roleRepository.findByName(dbName)
+                .or(() -> roleRepository.findByName(roleName))
+                .orElseThrow(() -> new RuntimeException("Rol bulunamadı: " + roleName));
     }
 }

@@ -54,7 +54,6 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> userData) {
-        // Rolü bul, yoksa CENTER_OPERATOR oluştur
         Role role = roleRepository.findByName("CENTER_OPERATOR")
                 .orElseGet(() -> {
                     Role newRole = new Role();

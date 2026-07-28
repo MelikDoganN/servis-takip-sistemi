@@ -1,16 +1,21 @@
 package com.servis.backend.service;
 
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.servis.backend.dto.WarrantyDeviceInfoDto;
 import com.servis.backend.entity.Device;
 import com.servis.backend.entity.WarrantyRecord;
+import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.repository.DeviceRepository;
 import com.servis.backend.repository.WarrantyRecordRepository;
+import com.servis.backend.repository.WorkOrderRepository;
 
 @Service
 public class WarrantyService {
@@ -21,6 +26,9 @@ public class WarrantyService {
     @Autowired
     private WarrantyRecordRepository warrantyRecordRepository;
 
+    @Autowired
+    private WorkOrderRepository workOrderRepository;
+
     /**
      *  G = T_başlangıç + F_süre
      * T_başlangıç = Cihazın satın alma tarihi (yoksa kurulum tarihi)
@@ -28,11 +36,9 @@ public class WarrantyService {
      */
     @Transactional
     public WarrantyRecord createWarrantyRecord(Long deviceId, String warrantyType) {
-        // 1. Cihazı bul
         Device device = deviceRepository.findById(deviceId)
                 .orElseThrow(() -> new RuntimeException("Cihaz bulunamadı: " + deviceId));
 
-        // 2. Garanti tipine göre ay sayısını al (F_süre)
         Integer months;
         switch (warrantyType.toUpperCase()) {
             case "PARTS":
@@ -48,12 +54,10 @@ public class WarrantyService {
                 throw new RuntimeException("Geçersiz garanti tipi: " + warrantyType);
         }
 
-        // Eğer garanti süresi tanımlı değilse (null veya 0) hata ver
         if (months == null || months == 0) {
             throw new RuntimeException("Bu model için " + warrantyType + " garantisi tanımlı değil.");
         }
 
-        // 3. Başlangıç tarihini belirle (T_başlangıç)
         LocalDate startDate = device.getPurchaseDate();
         if (startDate == null) {
             startDate = device.getInstallationDate();
@@ -62,10 +66,8 @@ public class WarrantyService {
             throw new RuntimeException("Cihazın satın alma veya kurulum tarihi bulunamadı.");
         }
 
-        // 4. Bitiş tarihini hesapla (G = T_başlangıç + F_süre)
         LocalDate endDate = startDate.plusMonths(months);
 
-        // 5. WarrantyRecord oluştur ve kaydet
         WarrantyRecord record = new WarrantyRecord();
         record.setDevice(device);
         record.setWarrantyType(warrantyType.toUpperCase());
@@ -76,16 +78,66 @@ public class WarrantyService {
         return warrantyRecordRepository.save(record);
     }
 
-    /**
-     * Bir cihazın belirtilen garanti tipi kapsamında hala garantili olup olmadığını kontrol eder.
-     */
     public boolean isUnderWarranty(Long deviceId, String warrantyType) {
         Optional<WarrantyRecord> record = warrantyRecordRepository
                 .findByDeviceIdAndWarrantyType(deviceId, warrantyType.toUpperCase());
 
         if (record.isPresent()) {
-            return record.get().getEndDate().isAfter(LocalDate.now());
+            return !record.get().getEndDate().isBefore(LocalDate.now());
         }
-        return false; 
+        return false;
+    }
+
+    /**
+     * Seri numarası ile güvenli özet DTO (hassas müşteri/user bilgisi yok).
+     */
+    public WarrantyDeviceInfoDto getWarrantyInfoBySerial(String serialNumber) {
+        Device device = deviceRepository.findBySerialNumber(serialNumber)
+                .orElseThrow(() -> new RuntimeException("Cihaz bulunamadı: " + serialNumber));
+
+        String brandName = device.getModel() != null && device.getModel().getBrand() != null
+                ? device.getModel().getBrand().getName()
+                : null;
+        String modelName = device.getModel() != null ? device.getModel().getName() : null;
+
+        List<WarrantyRecord> records = warrantyRecordRepository.findByDeviceId(device.getId());
+        Optional<WarrantyRecord> primary = records.stream()
+                .filter(r -> "GENERAL".equalsIgnoreCase(r.getWarrantyType()))
+                .findFirst()
+                .or(() -> records.stream().max(Comparator.comparing(WarrantyRecord::getEndDate)));
+
+        LocalDate start = primary.map(WarrantyRecord::getStartDate).orElse(null);
+        LocalDate end = primary.map(WarrantyRecord::getEndDate).orElse(null);
+        String status;
+        if (end == null) {
+            status = "UNKNOWN";
+        } else if (end.isBefore(LocalDate.now())) {
+            status = "EXPIRED";
+        } else {
+            status = "ACTIVE";
+        }
+
+        List<WorkOrder> workOrders = workOrderRepository.findByDeviceId(device.getId());
+        List<WarrantyDeviceInfoDto.ServiceHistorySummary> history = workOrders.stream()
+                .map(wo -> {
+                    WarrantyDeviceInfoDto.ServiceHistorySummary s = new WarrantyDeviceInfoDto.ServiceHistorySummary();
+                    s.setWorkOrderId(wo.getId());
+                    s.setStatus(wo.getStatus());
+                    s.setDescription(wo.getDescription());
+                    s.setCreatedAt(wo.getCreatedAt());
+                    return s;
+                })
+                .toList();
+
+        WarrantyDeviceInfoDto dto = new WarrantyDeviceInfoDto();
+        dto.setDeviceName(modelName != null ? modelName : serialNumber);
+        dto.setBrand(brandName);
+        dto.setModel(modelName);
+        dto.setSerialNumber(device.getSerialNumber());
+        dto.setWarrantyStart(start);
+        dto.setWarrantyEnd(end);
+        dto.setWarrantyStatus(status);
+        dto.setServiceHistory(history);
+        return dto;
     }
 }

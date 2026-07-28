@@ -1,5 +1,6 @@
 package com.servis.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -36,6 +37,7 @@ public class User {
     @Column(length = 150, unique = true, nullable = false)
     private String email;
 
+    @JsonIgnore
     @NotBlank(message = "Şifre boş olamaz")
     @Size(min = 6, message = "Şifre en az 6 karakter olmalı")
     @Column(name = "password_hash", length = 255, nullable = false)

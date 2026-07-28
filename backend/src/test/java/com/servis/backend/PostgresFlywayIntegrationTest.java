@@ -86,10 +86,18 @@ class PostgresFlywayIntegrationTest {
         List<Map<String, Object>> history = jdbcTemplate.queryForList(
                 "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
         );
-        assertTrue(history.size() >= 3, "Expected at least V1,V2,V3 migrations, got: " + history.size());
+        assertTrue(history.size() >= 4, "Expected at least V1-V4 migrations, got: " + history.size());
 
         Integer roles = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertEquals(5, roles);
+
+        Integer adminRole = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM roles WHERE name = 'ADMIN'", Integer.class);
+        assertEquals(1, adminRole);
+
+        Integer legacyAdmin = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM roles WHERE name = 'ROLE_ADMIN'", Integer.class);
+        assertEquals(0, legacyAdmin);
 
         Integer tables = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'work_order_attachments'",

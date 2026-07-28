@@ -27,10 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/auth/") || 
-               path.startsWith("/h2-console/") ||
-               path.startsWith("/api/workorders/") ||
-               path.startsWith("/api/warranty/");
+        return path.startsWith("/auth/") || path.startsWith("/h2-console/");
     }
 
     @Override
@@ -39,7 +36,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Authorization header'ını al
         final String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -47,7 +43,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 2. Token'ı doğrula
         final String token = authHeader.substring(7);
         try {
             final String username = jwtService.extractUsername(token);
@@ -64,7 +59,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             System.out.println("JWT hatası: " + e.getMessage());
         }
 
-        // 3. Zinciri devam ettir
         filterChain.doFilter(request, response);
     }
 }

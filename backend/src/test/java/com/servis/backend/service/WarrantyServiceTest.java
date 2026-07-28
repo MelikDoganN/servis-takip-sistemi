@@ -3,6 +3,7 @@ package com.servis.backend.service;
 import com.servis.backend.entity.*;
 import com.servis.backend.repository.DeviceRepository;
 import com.servis.backend.repository.WarrantyRecordRepository;
+import com.servis.backend.repository.WorkOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +26,9 @@ class WarrantyServiceTest {
 
     @Mock
     private WarrantyRecordRepository warrantyRecordRepository;
+
+    @Mock
+    private WorkOrderRepository workOrderRepository;
 
     @InjectMocks
     private WarrantyService warrantyService;
