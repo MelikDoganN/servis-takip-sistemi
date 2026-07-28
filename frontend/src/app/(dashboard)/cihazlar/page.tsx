@@ -8,6 +8,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Pagination } from "@/components/ui/Pagination";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DetailList } from "@/components/ui/DetailList";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -34,6 +35,8 @@ export default function CihazlarPage() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -65,6 +68,11 @@ export default function CihazlarPage() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return devices;
@@ -76,6 +84,13 @@ export default function CihazlarPage() {
         d.model?.brand?.name?.toLowerCase().includes(q)
     );
   }, [devices, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, pageSize]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 0;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const closeModal = () => {
     setModalMode(null);
@@ -259,65 +274,77 @@ export default function CihazlarPage() {
                 : "Arama kriterinizi değiştirmeyi deneyin"
             }
           />
-        ) : viewMode === "table" ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Seri No</TableHead>
-                  <TableHead>Marka / Model</TableHead>
-                  <TableHead>Müşteri</TableHead>
-                  <TableHead>Satın Alma</TableHead>
-                  <TableHead>Kurulum</TableHead>
-                  <TableHead className="text-right">İşlemler</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((device) => (
-                  <TableRow key={device.id}>
-                    <TableCell className="font-medium text-slate-900">{device.serialNumber}</TableCell>
-                    <TableCell>
-                      {device.model?.brand?.name ?? "—"} / {device.model?.name ?? "—"}
-                    </TableCell>
-                    <TableCell>{device.customer?.fullName || "—"}</TableCell>
-                    <TableCell>{formatDate(device.purchaseDate)}</TableCell>
-                    <TableCell>{formatDate(device.installationDate)}</TableCell>
-                    <TableCell>{actionButtons(device)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((device) => (
-              <div key={device.id} className="surface-card card-hover overflow-hidden">
-                <div className="flex h-28 items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50">
-                  <svg className="h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1}
-                      d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <div className="space-y-3 p-4">
-                  <div>
-                    <p className="font-semibold text-slate-900">{device.serialNumber}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {device.model?.brand?.name} {device.model?.name}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">{device.customer?.fullName}</p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      Kurulum: {formatDate(device.installationDate)}
-                    </p>
-                  </div>
-                  {actionButtons(device)}
-                </div>
+          <>
+            {viewMode === "table" ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Seri No</TableHead>
+                      <TableHead>Marka / Model</TableHead>
+                      <TableHead>Müşteri</TableHead>
+                      <TableHead>Satın Alma</TableHead>
+                      <TableHead>Kurulum</TableHead>
+                      <TableHead className="text-right">İşlemler</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginated.map((device) => (
+                      <TableRow key={device.id}>
+                        <TableCell className="font-medium text-slate-900">{device.serialNumber}</TableCell>
+                        <TableCell>
+                          {device.model?.brand?.name ?? "—"} / {device.model?.name ?? "—"}
+                        </TableCell>
+                        <TableCell>{device.customer?.fullName || "—"}</TableCell>
+                        <TableCell>{formatDate(device.purchaseDate)}</TableCell>
+                        <TableCell>{formatDate(device.installationDate)}</TableCell>
+                        <TableCell>{actionButtons(device)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+                {paginated.map((device) => (
+                  <div key={device.id} className="surface-card card-hover overflow-hidden">
+                    <div className="flex h-28 items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50">
+                      <svg className="h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1}
+                          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div className="space-y-3 p-4">
+                      <div>
+                        <p className="font-semibold text-slate-900">{device.serialNumber}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {device.model?.brand?.name} {device.model?.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">{device.customer?.fullName}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Kurulum: {formatDate(device.installationDate)}
+                        </p>
+                      </div>
+                      {actionButtons(device)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
         )}
       </SectionCard>
 

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Pagination } from "@/components/ui/Pagination";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DetailList } from "@/components/ui/DetailList";
 import {
@@ -70,6 +71,8 @@ export default function TeknisyenlerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selected, setSelected] = useState<Technician | null>(null);
@@ -109,6 +112,13 @@ export default function TeknisyenlerPage() {
       );
     });
   }, [technicians, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, pageSize]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 0;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const closeModal = () => {
     setModalMode(null);
@@ -266,7 +276,7 @@ export default function TeknisyenlerPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((t) => (
+                  {paginated.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-medium text-slate-900">
                         #{t.id}
@@ -316,7 +326,7 @@ export default function TeknisyenlerPage() {
             </div>
 
             <div className="space-y-3 md:hidden">
-              {filtered.map((t) => (
+              {paginated.map((t) => (
                 <div
                   key={t.id}
                   className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft"
@@ -364,6 +374,15 @@ export default function TeknisyenlerPage() {
                 </div>
               ))}
             </div>
+
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </>
         )}
       </SectionCard>

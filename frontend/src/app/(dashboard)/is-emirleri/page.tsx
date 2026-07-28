@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Pagination } from "@/components/ui/Pagination";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DetailList } from "@/components/ui/DetailList";
 import {
@@ -92,6 +93,8 @@ export default function IsEmirleriPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "">("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selected, setSelected] = useState<WorkOrder | null>(null);
@@ -162,6 +165,11 @@ export default function IsEmirleriPage() {
   }, [loadLookups]);
 
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
+
+  useEffect(() => {
     if (view === "list") {
       void loadList();
     } else {
@@ -182,6 +190,13 @@ export default function IsEmirleriPage() {
       );
     });
   }, [workOrders, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, pageSize]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 0;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const devicesForCustomer = useMemo(() => {
     if (!customerId) return devices;
@@ -472,7 +487,7 @@ export default function IsEmirleriPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((wo) => (
+                    {paginated.map((wo) => (
                       <TableRow key={wo.id}>
                         <TableCell className="font-medium text-slate-900">
                           #{wo.id}
@@ -525,7 +540,7 @@ export default function IsEmirleriPage() {
               </div>
 
               <div className="space-y-3 md:hidden">
-                {filtered.map((wo) => (
+                {paginated.map((wo) => (
                   <div
                     key={wo.id}
                     className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft"
@@ -574,6 +589,15 @@ export default function IsEmirleriPage() {
                   </div>
                 ))}
               </div>
+
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={filtered.length}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             </>
           )}
         </SectionCard>

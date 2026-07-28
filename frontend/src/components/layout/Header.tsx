@@ -1,11 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { navItems } from "@/config/navigation";
 import { useSidebar } from "@/hooks/useSidebar";
 import { logout } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
+import { GlobalSearch } from "./GlobalSearch";
+import { NotificationBell } from "./NotificationBell";
 
 export function Header() {
   const pathname = usePathname();
@@ -51,25 +53,9 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="relative hidden md:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              placeholder="Ara..."
-              className="h-10 w-56 rounded-xl border border-slate-200 bg-surface pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-accent focus:bg-white focus:ring-4 focus:ring-accent/20 lg:w-64"
-              readOnly
-              aria-label="Arama"
-            />
-          </div>
+          <GlobalSearch />
 
-          <button
-            type="button"
-            className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-navy/70 shadow-soft transition hover:border-accent/40 hover:bg-accent-soft hover:text-navy"
-            aria-label="Bildirimler"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_6px_rgba(18,167,205,0.8)]" />
-          </button>
+          <NotificationBell />
 
           <div className="hidden items-center gap-2 rounded-xl border border-primary-100 bg-gradient-to-r from-white to-primary-50/50 py-1.5 pl-1.5 pr-3 shadow-soft sm:flex">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-navy to-accent text-xs font-semibold text-white">

@@ -23,7 +23,6 @@ export function Sidebar({ mobile = false }: SidebarProps) {
   }, []);
 
   const visibleItems = useMemo(() => {
-    // Rol claim yoksa menü gösterme (güvenli varsayılan)
     if (roles.length === 0) return [];
     return navItems.filter((item) =>
       item.roles.some((allowed) => roles.includes(allowed))
@@ -32,25 +31,25 @@ export function Sidebar({ mobile = false }: SidebarProps) {
 
   const content = (
     <>
-      <div className="relative overflow-hidden border-b border-sidebar-border px-5 py-5">
+      <div className="relative flex h-16 shrink-0 items-center overflow-hidden border-b border-sidebar-border px-5">
         <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-accent/20 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-10 left-0 h-20 w-32 rounded-full bg-navy-soft/40 blur-xl" />
         <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-primary-600 shadow-sidebar-glow ring-1 ring-white/20">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-primary-600 shadow-sidebar-glow ring-1 ring-white/20">
             <Settings2 className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <p className="text-sm font-semibold tracking-tight text-white">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold tracking-tight text-white">
               Servis Takip
             </p>
-            <p className="text-[11px] font-medium text-primary-200/90">
+            <p className="truncate text-[11px] font-medium text-primary-200/90">
               Kurumsal Yönetim Paneli
             </p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-5">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-5">
         <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary-300/70">
           Ana Menü
         </p>
@@ -66,13 +65,13 @@ export function Sidebar({ mobile = false }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    title={item.label}
                     onClick={mobile ? close : undefined}
                     className={cn(
-                      "group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium",
-                      "transition-all duration-300 ease-out",
+                      "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200",
                       isActive
                         ? "nav-link-active"
-                        : "text-slate-300 hover:bg-sidebar-hover hover:text-white hover:translate-x-0.5"
+                        : "text-slate-300 hover:bg-sidebar-hover hover:text-white"
                     )}
                   >
                     {isActive && (
@@ -80,7 +79,7 @@ export function Sidebar({ mobile = false }: SidebarProps) {
                     )}
                     <span
                       className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-300",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200",
                         isActive
                           ? "bg-accent/30 text-white scale-105"
                           : "bg-white/5 text-slate-400 group-hover:bg-white/10 group-hover:text-accent"
@@ -88,9 +87,9 @@ export function Sidebar({ mobile = false }: SidebarProps) {
                     >
                       {item.icon}
                     </span>
-                    <span className="relative">{item.label}</span>
+                    <span className="truncate">{item.label}</span>
                     {isActive && (
-                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                      <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
                     )}
                   </Link>
                 </li>
@@ -101,24 +100,31 @@ export function Sidebar({ mobile = false }: SidebarProps) {
       </nav>
 
       <div className="border-t border-sidebar-border bg-navy-deep/40 px-5 py-4">
-        <p className="text-[11px] font-medium text-primary-200/80">
+        <p className="truncate text-[11px] font-medium text-primary-200/80">
           Servis Takip Sistemi
         </p>
-        <p className="mt-0.5 text-[10px] text-slate-500">Kurumsal · v0.1.0</p>
+        <p className="mt-0.5 truncate text-[10px] text-slate-500">
+          Kurumsal · v0.1.0
+        </p>
       </div>
     </>
   );
 
   if (mobile) {
     return (
-      <div className="flex h-full w-72 flex-col bg-gradient-to-b from-sidebar via-navy to-navy-deep text-white animate-slide-up shadow-elevated">
+      <div className="flex h-full w-[260px] flex-col bg-gradient-to-b from-sidebar via-navy to-navy-deep text-white animate-slide-up shadow-elevated">
         {content}
       </div>
     );
   }
 
   return (
-    <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col bg-gradient-to-b from-sidebar via-navy to-navy-deep text-white shadow-[4px_0_24px_rgba(38,47,89,0.15)] transition-transform duration-300">
+    <aside
+      className={cn(
+        "hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-[260px] lg:flex-col",
+        "bg-gradient-to-b from-sidebar via-navy to-navy-deep text-white"
+      )}
+    >
       {content}
     </aside>
   );

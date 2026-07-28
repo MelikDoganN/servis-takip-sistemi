@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   ClipboardList,
@@ -9,6 +9,10 @@ import {
   Package,
   CheckCircle2,
   XCircle,
+  FileDown,
+  PieChart,
+  ListChecks,
+  Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -17,23 +21,96 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { KpiCard } from "@/components/ui/KpiCard";
-import { SkeletonCard } from "@/components/ui/Skeleton";
+import { SkeletonCard, SkeletonTable } from "@/components/ui/Skeleton";
+import { Badge } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
+import { StatusBarChart, StatusBarChartItem } from "@/components/ui/StatusBarChart";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/Table";
 import {
   reportService,
   WorkOrderSummaryReport,
 } from "@/services/reportService";
+import { workOrderService } from "@/services/workOrderService";
+import { technicianService } from "@/services/technicianService";
 import { ApiError } from "@/types/api";
+import {
+  WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_STATUSES,
+  WorkOrder,
+  WorkOrderStatus,
+} from "@/types/workOrder";
+import { Technician } from "@/types/technician";
+import { formatDateTime } from "@/lib/utils";
+import { useToast } from "@/components/ui/Toast";
+import { generateWorkOrderReportPdf } from "@/lib/pdfExport";
+
+const STATUS_BAR_COLORS: Record<WorkOrderStatus, string> = {
+  OPEN: "bg-amber-500",
+  ASSIGNED: "bg-sky-500",
+  WAITING_PARTS: "bg-orange-500",
+  RESOLVED: "bg-teal-500",
+  CLOSED: "bg-slate-400",
+};
+
+function statusBadgeVariant(
+  status: WorkOrderStatus
+): "default" | "success" | "warning" | "danger" | "info" | "neutral" {
+  switch (status) {
+    case "OPEN":
+      return "warning";
+    case "ASSIGNED":
+      return "info";
+    case "WAITING_PARTS":
+      return "default";
+    case "RESOLVED":
+      return "success";
+    case "CLOSED":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
+interface TechnicianPerformance {
+  id: number;
+  name: string;
+  region: string;
+  total: number;
+  open: number;
+  resolved: number;
+  completionRate: number;
+  currentWorkload: number;
+  isAvailable: boolean;
+}
+
+const DETAIL_PAGE_SIZE_DEFAULT = 10;
 
 export default function RaporlarPage() {
+  const toast = useToast();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [report, setReport] = useState<WorkOrderSummaryReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState("");
+
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [detailLoading, setDetailLoading] = useState(true);
+  const [detailError, setDetailError] = useState("");
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DETAIL_PAGE_SIZE_DEFAULT);
 
   const fetchReport = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setReportLoading(true);
+    setReportError("");
     try {
       const data = await reportService.getWorkOrderSummary(
         startDate || undefined,
@@ -42,16 +119,128 @@ export default function RaporlarPage() {
       setReport(data);
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message || "Rapor yüklenemedi");
+      setReportError(apiErr.message || "Rapor yüklenemedi");
       setReport(null);
     } finally {
-      setLoading(false);
+      setReportLoading(false);
     }
   }, [startDate, endDate]);
+
+  const fetchDetailData = useCallback(async () => {
+    setDetailLoading(true);
+    setDetailError("");
+    try {
+      const [woData, techData] = await Promise.all([
+        workOrderService.getAll(1000),
+        technicianService.getAll().catch(() => [] as Technician[]),
+      ]);
+      setWorkOrders(woData);
+      setTechnicians(techData);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setDetailError(apiErr.message || "Detay veriler yüklenemedi");
+      setWorkOrders([]);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void fetchReport();
   }, [fetchReport]);
+
+  useEffect(() => {
+    void fetchDetailData();
+  }, [fetchDetailData]);
+
+  const filteredWorkOrders = useMemo(() => {
+    if (!startDate && !endDate) return workOrders;
+    const start = startDate ? new Date(`${startDate}T00:00:00`).getTime() : null;
+    const end = endDate ? new Date(`${endDate}T23:59:59.999`).getTime() : null;
+    return workOrders.filter((wo) => {
+      const created = new Date(wo.createdAt).getTime();
+      if (Number.isNaN(created)) return true;
+      if (start !== null && created < start) return false;
+      if (end !== null && created > end) return false;
+      return true;
+    });
+  }, [workOrders, startDate, endDate]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [startDate, endDate, pageSize]);
+
+  const statusBreakdown = useMemo<StatusBarChartItem[]>(() => {
+    return WORK_ORDER_STATUSES.map((status) => ({
+      label: WORK_ORDER_STATUS_LABELS[status],
+      value: filteredWorkOrders.filter((wo) => wo.status === status).length,
+      colorClass: STATUS_BAR_COLORS[status],
+    }));
+  }, [filteredWorkOrders]);
+
+  const technicianPerformance = useMemo<TechnicianPerformance[]>(() => {
+    const rows = technicians.map((tech) => {
+      const assigned = filteredWorkOrders.filter(
+        (wo) => wo.technician?.id === tech.id
+      );
+      const resolved = assigned.filter(
+        (wo) => wo.status === "RESOLVED" || wo.status === "CLOSED"
+      ).length;
+      const total = assigned.length;
+      return {
+        id: tech.id,
+        name: tech.user?.fullName || `Teknisyen #${tech.id}`,
+        region: tech.region?.name || "—",
+        total,
+        open: total - resolved,
+        resolved,
+        completionRate: total > 0 ? Math.round((resolved / total) * 100) : 0,
+        currentWorkload: tech.currentWorkload ?? 0,
+        isAvailable: tech.isAvailable ?? true,
+      };
+    });
+    return rows.sort((a, b) => b.total - a.total);
+  }, [technicians, filteredWorkOrders]);
+
+  const totalPages = Math.ceil(filteredWorkOrders.length / pageSize) || 0;
+  const paginatedWorkOrders = filteredWorkOrders.slice(
+    (page - 1) * pageSize,
+    page * pageSize
+  );
+
+  const handleDownloadPdf = () => {
+    if (!report) return;
+    try {
+      generateWorkOrderReportPdf({
+        report,
+        startDate,
+        endDate,
+        statusBreakdown: statusBreakdown.map((s) => ({
+          label: s.label,
+          value: s.value,
+        })),
+        workOrders: filteredWorkOrders.map((wo) => ({
+          id: wo.id,
+          customer: wo.customer?.fullName || "-",
+          device: wo.device?.serialNumber || "-",
+          technician: wo.technician?.user?.fullName || "-",
+          status: WORK_ORDER_STATUS_LABELS[wo.status] ?? wo.status,
+          priority: wo.priority || "-",
+          createdAt: formatDateTime(wo.createdAt),
+        })),
+        technicianPerformance: technicianPerformance.map((t) => ({
+          name: t.name,
+          total: t.total,
+          open: t.open,
+          resolved: t.resolved,
+          completionRate: t.completionRate,
+        })),
+      });
+      toast.success("PDF raporu indirildi");
+    } catch {
+      toast.error("PDF oluşturulamadı");
+    }
+  };
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -60,9 +249,26 @@ export default function RaporlarPage() {
         description="Operasyonel performans ve servis analizleri"
         icon={<BarChart3 className="h-5 w-5" />}
         action={
-          <Button variant="outline" size="sm" onClick={() => void fetchReport()}>
-            Yenile
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void fetchReport();
+                void fetchDetailData();
+              }}
+            >
+              Yenile
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleDownloadPdf}
+              disabled={!report || reportLoading}
+            >
+              <FileDown className="mr-1.5 h-4 w-4" />
+              PDF İndir
+            </Button>
+          </div>
         }
       />
 
@@ -100,10 +306,10 @@ export default function RaporlarPage() {
         </div>
       </SectionCard>
 
-      {error && <ErrorMessage message={error} />}
+      {reportError && <ErrorMessage message={reportError} />}
 
       <SectionCard title="İş Emri Özeti" description="Duruma göre iş emri sayıları">
-        {loading ? (
+        {reportLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <SkeletonCard />
             <SkeletonCard />
@@ -161,6 +367,155 @@ export default function RaporlarPage() {
               iconBg="bg-slate-100 text-slate-600"
               icon={<XCircle className="h-6 w-6" />}
             />
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Durum Dağılımı"
+        description="Seçilen tarih aralığındaki iş emirlerinin durum kırılımı"
+      >
+        {detailLoading ? (
+          <div className="space-y-4">
+            <SkeletonCard />
+          </div>
+        ) : detailError ? (
+          <ErrorMessage message={detailError} />
+        ) : filteredWorkOrders.length === 0 ? (
+          <EmptyState
+            title="Grafik için veri yok"
+            description="Seçilen tarih aralığında iş emri bulunamadı"
+            icon={<PieChart className="h-8 w-8" />}
+          />
+        ) : (
+          <StatusBarChart items={statusBreakdown} />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="İş Emri Detay Raporu"
+        description="Tarih aralığındaki tüm iş emirlerinin listesi"
+        noPadding
+      >
+        {detailLoading ? (
+          <SkeletonTable rows={6} />
+        ) : detailError ? (
+          <div className="p-5">
+            <ErrorMessage message={detailError} />
+          </div>
+        ) : filteredWorkOrders.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              icon={<ListChecks className="h-8 w-8" />}
+              title="İş emri bulunamadı"
+              description="Seçilen tarih aralığında kayıt yok"
+            />
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Müşteri</TableHead>
+                    <TableHead>Cihaz</TableHead>
+                    <TableHead>Teknisyen</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>Öncelik</TableHead>
+                    <TableHead>Oluşturma</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedWorkOrders.map((wo) => (
+                    <TableRow key={wo.id}>
+                      <TableCell className="font-medium text-slate-900">#{wo.id}</TableCell>
+                      <TableCell>{wo.customer?.fullName || "—"}</TableCell>
+                      <TableCell>{wo.device?.serialNumber || "—"}</TableCell>
+                      <TableCell>{wo.technician?.user?.fullName || "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant={statusBadgeVariant(wo.status)}>
+                          {WORK_ORDER_STATUS_LABELS[wo.status] ?? wo.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{wo.priority || "—"}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-slate-500">
+                        {formatDateTime(wo.createdAt)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredWorkOrders.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
+          </>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Teknisyen Performansı"
+        description="Tarih aralığındaki iş yüküne göre teknisyen karşılaştırması"
+        noPadding
+      >
+        {detailLoading ? (
+          <SkeletonTable rows={5} />
+        ) : detailError ? (
+          <div className="p-5">
+            <ErrorMessage message={detailError} />
+          </div>
+        ) : technicianPerformance.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              icon={<Wrench className="h-8 w-8" />}
+              title="Teknisyen bulunamadı"
+              description="Performans karşılaştırması için teknisyen kaydı gerekir"
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Teknisyen</TableHead>
+                  <TableHead>Bölge</TableHead>
+                  <TableHead>Toplam</TableHead>
+                  <TableHead>Açık</TableHead>
+                  <TableHead>Çözülen</TableHead>
+                  <TableHead>Başarı Oranı</TableHead>
+                  <TableHead>Güncel İş Yükü</TableHead>
+                  <TableHead>Durum</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {technicianPerformance.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium text-slate-900">{t.name}</TableCell>
+                    <TableCell>{t.region}</TableCell>
+                    <TableCell>{t.total}</TableCell>
+                    <TableCell>{t.open}</TableCell>
+                    <TableCell>{t.resolved}</TableCell>
+                    <TableCell>
+                      <Badge variant={t.completionRate >= 70 ? "success" : t.completionRate >= 40 ? "warning" : "neutral"}>
+                        %{t.completionRate}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{t.currentWorkload}</TableCell>
+                    <TableCell>
+                      <Badge variant={t.isAvailable ? "success" : "neutral"}>
+                        {t.isAvailable ? "Müsait" : "Meşgul"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </SectionCard>

@@ -21,8 +21,6 @@ import { useToast } from "@/components/ui/Toast";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { Eye, Pencil, Trash2, Users } from "lucide-react";
 
-const PAGE_SIZE = 10;
-
 type ModalMode = "create" | "edit" | "detail" | "delete" | null;
 
 export default function MusterilerPage() {
@@ -34,6 +32,7 @@ export default function MusterilerPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "withEmail" | "withPhone">("all");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -61,6 +60,11 @@ export default function MusterilerPage() {
     fetchCustomers();
   }, [fetchCustomers]);
 
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
+
   const filtered = useMemo(() => {
     return customers.filter((c) => {
       const q = search.toLowerCase();
@@ -80,12 +84,12 @@ export default function MusterilerPage() {
     });
   }, [customers, search, filter]);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 0;
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.ceil(filtered.length / pageSize) || 0;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [search, filter]);
+  }, [search, filter, pageSize]);
 
   const closeModal = () => {
     setModalMode(null);
@@ -296,8 +300,9 @@ export default function MusterilerPage() {
               currentPage={page}
               totalPages={totalPages}
               totalItems={filtered.length}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
               onPageChange={setPage}
+              onPageSizeChange={setPageSize}
             />
           </>
         )}

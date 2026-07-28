@@ -43,7 +43,6 @@ interface FormErrors {
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PAGE_SIZE = 10;
 
 function roleBadgeVariant(
   roleName?: string | null
@@ -73,6 +72,7 @@ export default function KullaniciYonetimiPage() {
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
@@ -91,7 +91,7 @@ export default function KullaniciYonetimiPage() {
     setError("");
     setForbidden(false);
     try {
-      const data = await userService.getPage(page, PAGE_SIZE, searchQuery || undefined);
+      const data = await userService.getPage(page, pageSize, searchQuery || undefined);
       setUsers(data.content ?? []);
       setTotalPages(data.totalPages ?? 0);
       setTotalElements(data.totalElements ?? 0);
@@ -111,11 +111,16 @@ export default function KullaniciYonetimiPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, searchQuery]);
+  }, [page, pageSize, searchQuery]);
 
   useEffect(() => {
     void fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -295,8 +300,12 @@ export default function KullaniciYonetimiPage() {
                 currentPage={page + 1}
                 totalPages={totalPages}
                 totalItems={totalElements}
-                pageSize={PAGE_SIZE}
+                pageSize={pageSize}
                 onPageChange={(p) => setPage(p - 1)}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(0);
+                }}
               />
             </>
           )}
