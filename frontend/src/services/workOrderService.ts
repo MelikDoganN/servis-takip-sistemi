@@ -1,10 +1,12 @@
-import { apiClient } from "./api";
+import { apiClient, apiDownload } from "./api";
 import { PageResponse } from "@/types/api";
 import {
   CreateWorkOrderRequest,
   KanbanBoard,
   WorkOrder,
+  WorkOrderAttachment,
   WorkOrderStatus,
+  WorkOrderStatusHistory,
 } from "@/types/workOrder";
 
 function unwrapContent<T>(data: PageResponse<T> | T[]): T[] {
@@ -76,5 +78,33 @@ export const workOrderService = {
 
   getKanban(): Promise<KanbanBoard> {
     return apiClient<KanbanBoard>("/api/workorders/kanban");
+  },
+
+  getHistory(id: number): Promise<WorkOrderStatusHistory[]> {
+    return apiClient<WorkOrderStatusHistory[]>(
+      `/api/workorders/${id}/history`
+    );
+  },
+
+  getAttachments(id: number): Promise<WorkOrderAttachment[]> {
+    return apiClient<WorkOrderAttachment[]>(
+      `/api/workorders/${id}/attachments`
+    );
+  },
+
+  uploadFile(id: number, file: File): Promise<WorkOrderAttachment> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient<WorkOrderAttachment>(`/api/workorders/${id}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  downloadPdf(id: number): Promise<void> {
+    return apiDownload(
+      `/api/workorders/${id}/pdf`,
+      `workorder_${id}.pdf`
+    );
   },
 };

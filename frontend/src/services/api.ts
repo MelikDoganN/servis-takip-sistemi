@@ -59,8 +59,11 @@ export async function apiClient<T>(
   const { body, headers, skipAuth = false, ...rest } = options;
 
   const token = skipAuth ? null : getToken();
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
   const requestHeaders: HeadersInit = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...headers,
   };
@@ -68,7 +71,12 @@ export async function apiClient<T>(
   const response = await fetch(path, {
     ...rest,
     headers: requestHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body:
+      body === undefined
+        ? undefined
+        : isFormData
+          ? (body as FormData)
+          : JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -100,4 +108,48 @@ export async function apiClient<T>(
   }
 
   return response.json() as Promise<T>;
+}
+
+/** Binary/PDF indirme (JSON olmayan yanıtlar) */
+export async function apiDownload(
+  path: string,
+  filenameFallback = "download"
+): Promise<void> {
+  const token = getToken();
+  const response = await fetch(path, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    let raw = "";
+    try {
+      raw = await response.text();
+    } catch {
+      raw = "";
+    }
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
+    const error: ApiError = {
+      message: resolveMessage(response.status, raw, response.statusText, false),
+      status: response.status,
+    };
+    throw error;
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+  const filename = match?.[1]?.replace(/['"]/g, "") || filenameFallback;
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

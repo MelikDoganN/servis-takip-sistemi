@@ -7,6 +7,9 @@ import {
   List,
   Plus,
   RefreshCw,
+  FileText,
+  Upload,
+  Paperclip,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -43,8 +46,10 @@ import {
   WORK_ORDER_STATUSES,
   WORK_ORDER_TRANSITIONS,
   WorkOrder,
+  WorkOrderAttachment,
   WorkOrderPriority,
   WorkOrderStatus,
+  WorkOrderStatusHistory,
 } from "@/types/workOrder";
 import { formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -99,6 +104,11 @@ export default function IsEmirleriPage() {
   >([]);
   const [assignTechnicianId, setAssignTechnicianId] = useState("");
   const [availableLoading, setAvailableLoading] = useState(false);
+  const [history, setHistory] = useState<WorkOrderStatusHistory[]>([]);
+  const [attachments, setAttachments] = useState<WorkOrderAttachment[]>([]);
+  const [extrasLoading, setExtrasLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const [customerId, setCustomerId] = useState("");
   const [deviceId, setDeviceId] = useState("");
@@ -191,6 +201,8 @@ export default function IsEmirleriPage() {
     setNextStatus("");
     setAvailableTechnicians([]);
     setAssignTechnicianId("");
+    setHistory([]);
+    setAttachments([]);
     setCustomerId("");
     setDeviceId("");
     setDescription("");
@@ -206,15 +218,63 @@ export default function IsEmirleriPage() {
   const openDetail = async (id: number) => {
     setModalMode("detail");
     setDetailLoading(true);
+    setExtrasLoading(true);
     setActionError("");
+    setHistory([]);
+    setAttachments([]);
     try {
       const data = await workOrderService.getById(id);
       setSelected(data);
+      try {
+        const [hist, files] = await Promise.all([
+          workOrderService.getHistory(id),
+          workOrderService.getAttachments(id),
+        ]);
+        setHistory(Array.isArray(hist) ? hist : []);
+        setAttachments(Array.isArray(files) ? files : []);
+      } catch {
+        setHistory([]);
+        setAttachments([]);
+      } finally {
+        setExtrasLoading(false);
+      }
     } catch (err) {
       const apiErr = err as ApiError;
       setActionError(apiErr.message || "Detay yüklenemedi");
+      setExtrasLoading(false);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleUpload = async (file: File | null) => {
+    if (!selected || !file) return;
+    setUploadLoading(true);
+    setActionError("");
+    try {
+      const saved = await workOrderService.uploadFile(selected.id, file);
+      setAttachments((prev) => [saved, ...prev]);
+      toast.success("Dosya yüklendi");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setActionError(apiErr.message || "Dosya yüklenemedi");
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!selected) return;
+    setPdfLoading(true);
+    setActionError("");
+    try {
+      await workOrderService.downloadPdf(selected.id);
+      toast.success("PDF indirildi");
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setActionError(apiErr.message || "PDF indirilemedi");
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -714,6 +774,7 @@ export default function IsEmirleriPage() {
           <ErrorMessage message={actionError} />
         ) : selected ? (
           <div className="space-y-4">
+            {actionError && <ErrorMessage message={actionError} />}
             <DetailList
               items={[
                 {
@@ -769,6 +830,15 @@ export default function IsEmirleriPage() {
             {(WORK_ORDER_TRANSITIONS[selected.status]?.length ?? 0) > 0 ||
             canAssign(selected) ? (
               <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  loading={pdfLoading}
+                  onClick={() => void handleDownloadPdf()}
+                >
+                  <FileText className="mr-1.5 h-4 w-4" />
+                  PDF İndir
+                </Button>
                 {canAssign(selected) && (
                   <Button
                     type="button"
@@ -792,7 +862,108 @@ export default function IsEmirleriPage() {
                   </Button>
                 )}
               </div>
-            ) : null}
+            ) : (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  loading={pdfLoading}
+                  onClick={() => void handleDownloadPdf()}
+                >
+                  <FileText className="mr-1.5 h-4 w-4" />
+                  PDF İndir
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold text-slate-800">
+                  Dosya Yükle
+                </h4>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-soft hover:bg-slate-50">
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploadLoading ? "Yükleniyor…" : "Dosya seç"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadLoading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      void handleUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+
+              {extrasLoading ? (
+                <p className="text-xs text-slate-500">Ekler yükleniyor…</p>
+              ) : attachments.length === 0 ? (
+                <p className="text-xs text-slate-400">Henüz dosya yok</p>
+              ) : (
+                <ul className="space-y-2">
+                  {attachments.map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
+                    >
+                      <Paperclip className="h-4 w-4 shrink-0 text-slate-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-slate-800">
+                          {a.fileName}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {formatDateTime(a.createdAt)}
+                          {a.fileSize != null
+                            ? ` · ${Math.round(a.fileSize / 1024)} KB`
+                            : ""}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <h4 className="text-sm font-semibold text-slate-800">
+                Durum Geçmişi
+              </h4>
+              {extrasLoading ? (
+                <p className="text-xs text-slate-500">Geçmiş yükleniyor…</p>
+              ) : history.length === 0 ? (
+                <p className="text-xs text-slate-400">Geçmiş kaydı yok</p>
+              ) : (
+                <ul className="max-h-48 space-y-2 overflow-y-auto">
+                  {history.map((h) => (
+                    <li
+                      key={h.id}
+                      className="rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm shadow-soft"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={statusBadgeVariant(
+                            (h.newStatus as WorkOrderStatus) || "OPEN"
+                          )}
+                        >
+                          {WORK_ORDER_STATUS_LABELS[
+                            h.newStatus as WorkOrderStatus
+                          ] ?? h.newStatus}
+                        </Badge>
+                        <span className="text-xs text-slate-400">
+                          {formatDateTime(h.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {h.description ||
+                          `${h.oldStatus ?? "—"} → ${h.newStatus}`}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         ) : null}
       </Modal>

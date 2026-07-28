@@ -71,3 +71,23 @@ export interface CreateWorkOrderRequest {
 
 export type KanbanBoard = Partial<Record<WorkOrderStatus, WorkOrder[]>> &
   Record<string, WorkOrder[]>;
+
+export interface WorkOrderStatusHistory {
+  id: number;
+  oldStatus: string | null;
+  newStatus: string;
+  description: string | null;
+  channel: string | null;
+  changedBy: User | null;
+  createdAt: string;
+}
+
+export interface WorkOrderAttachment {
+  id: number;
+  fileName: string;
+  filePath: string;
+  fileSize: number | null;
+  mimeType: string | null;
+  uploadedBy: User | null;
+  createdAt: string;
+}

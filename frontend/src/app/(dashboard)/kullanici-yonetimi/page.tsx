@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { UserCog, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Badge } from "@/components/ui/Badge";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { Pagination } from "@/components/ui/Pagination";
 import {
   Table,
   TableBody,
@@ -42,6 +43,7 @@ interface FormErrors {
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PAGE_SIZE = 10;
 
 function roleBadgeVariant(
   roleName?: string | null
@@ -69,6 +71,10 @@ export default function KullaniciYonetimiPage() {
   const [error, setError] = useState("");
   const [forbidden, setForbidden] = useState(false);
   const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -85,8 +91,10 @@ export default function KullaniciYonetimiPage() {
     setError("");
     setForbidden(false);
     try {
-      const data = await userService.getAll();
-      setUsers(Array.isArray(data) ? data : []);
+      const data = await userService.getPage(page, PAGE_SIZE, searchQuery || undefined);
+      setUsers(data.content ?? []);
+      setTotalPages(data.totalPages ?? 0);
+      setTotalElements(data.totalElements ?? 0);
     } catch (err) {
       const apiErr = err as ApiError;
       if (apiErr.status === 403) {
@@ -98,28 +106,24 @@ export default function KullaniciYonetimiPage() {
         setError(apiErr.message || "Kullanıcılar yüklenemedi");
       }
       setUsers([]);
+      setTotalPages(0);
+      setTotalElements(0);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, searchQuery]);
 
   useEffect(() => {
     void fetchUsers();
   }, [fetchUsers]);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return users;
-    return users.filter((u) => {
-      const roleName = normalizeRoleName(u.role?.name ?? "").toLowerCase();
-      return (
-        u.fullName?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q) ||
-        u.phone?.toLowerCase().includes(q) ||
-        roleName.includes(q)
-      );
-    });
-  }, [users, search]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(0);
+      setSearchQuery(search);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const resetForm = () => {
     setFullName("");
@@ -213,13 +217,13 @@ export default function KullaniciYonetimiPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Ara (ad, e-posta, rol…)"
+              placeholder="Ada göre ara…"
             />
           }
         >
           {loading ? (
             <SkeletonTable rows={6} />
-          ) : filtered.length === 0 ? (
+          ) : users.length === 0 ? (
             <EmptyState
               title="Kullanıcı bulunamadı"
               description="Yeni kullanıcı oluşturarak başlayabilirsiniz"
@@ -240,7 +244,7 @@ export default function KullaniciYonetimiPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((u) => (
+                    {users.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell className="font-medium text-slate-900">
                           #{u.id}
@@ -266,7 +270,7 @@ export default function KullaniciYonetimiPage() {
               </div>
 
               <div className="space-y-3 md:hidden">
-                {filtered.map((u) => (
+                {users.map((u) => (
                   <div
                     key={u.id}
                     className="rounded-xl border border-slate-200 bg-white p-4 shadow-soft"
@@ -286,6 +290,14 @@ export default function KullaniciYonetimiPage() {
                   </div>
                 ))}
               </div>
+
+              <Pagination
+                currentPage={page + 1}
+                totalPages={totalPages}
+                totalItems={totalElements}
+                pageSize={PAGE_SIZE}
+                onPageChange={(p) => setPage(p - 1)}
+              />
             </>
           )}
         </SectionCard>
