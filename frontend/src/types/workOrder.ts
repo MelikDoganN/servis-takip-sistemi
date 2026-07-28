@@ -62,8 +62,7 @@ export interface WorkOrder {
 export interface CreateWorkOrderRequest {
   customer: { id: number };
   device: { id: number };
-  createdBy: { id: number };
-  description?: string;
+  description: string;
   priority?: WorkOrderPriority;
   serviceType?: ServiceType;
   regionId?: number;

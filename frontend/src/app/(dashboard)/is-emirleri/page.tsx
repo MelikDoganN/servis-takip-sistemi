@@ -112,7 +112,6 @@ export default function IsEmirleriPage() {
 
   const [customerId, setCustomerId] = useState("");
   const [deviceId, setDeviceId] = useState("");
-  const [createdById, setCreatedById] = useState("1");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<WorkOrderPriority>("MEDIUM");
   const [serviceType, setServiceType] = useState<ServiceType>("WARRANTY");
@@ -311,16 +310,21 @@ export default function IsEmirleriPage() {
     e.preventDefault();
     setActionError("");
 
-    if (!customerId || !deviceId || !createdById) {
-      setActionError("Müşteri, cihaz ve oluşturan kullanıcı ID zorunludur");
+    if (!customerId || !deviceId) {
+      setActionError("Müşteri ve cihaz zorunludur");
+      return;
+    }
+
+    const trimmedDescription = description.trim();
+    if (!trimmedDescription) {
+      setActionError("Açıklama zorunludur");
       return;
     }
 
     const payload: CreateWorkOrderRequest = {
       customer: { id: Number(customerId) },
       device: { id: Number(deviceId) },
-      createdBy: { id: Number(createdById) },
-      description: description.trim() || undefined,
+      description: trimmedDescription,
       priority,
       serviceType,
     };
@@ -689,26 +693,13 @@ export default function IsEmirleriPage() {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Oluşturan Kullanıcı ID
-            </label>
-            <input
-              type="number"
-              min={1}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={createdById}
-              onChange={(e) => setCreatedById(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
               Açıklama
             </label>
             <textarea
               className="min-h-[88px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              required
             />
           </div>
 
