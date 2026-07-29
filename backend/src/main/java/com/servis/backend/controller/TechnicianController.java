@@ -1,11 +1,11 @@
 package com.servis.backend.controller;
 
+import com.servis.backend.dto.CreateTechnicianRequest;
 import com.servis.backend.entity.Technician;
 import com.servis.backend.service.TechnicianService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,8 +30,8 @@ public class TechnicianController {
     // Sadece Admin ve Bölge Yöneticisi ekleyebilir
    // @PreAuthorize("hasAnyRole('ADMIN', 'REGION_MANAGER')")
     @PostMapping
-    public ResponseEntity<Technician> createTechnician(@RequestBody Technician technician) {
-        return new ResponseEntity<>(technicianService.createTechnician(technician), HttpStatus.CREATED);
+    public ResponseEntity<Technician> createTechnician(@RequestBody CreateTechnicianRequest request) {
+        return new ResponseEntity<>(technicianService.createTechnician(request), HttpStatus.CREATED);
     }
 
   //  @PreAuthorize("hasAnyRole('ADMIN', 'REGION_MANAGER')")
