@@ -44,12 +44,15 @@ import {
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_STATUSES,
   WorkOrder,
+  WorkOrderAttachment,
   WorkOrderStatus,
+  WorkOrderStatusHistory,
 } from "@/types/workOrder";
 import { Technician } from "@/types/technician";
 import { formatDateTime } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
 import { generateWorkOrderReportPdf } from "@/lib/pdfExport";
+import { WorkOrderPdfModal } from "@/components/workorders/WorkOrderPdfModal";
 
 const STATUS_BAR_COLORS: Record<WorkOrderStatus, string> = {
   OPEN: "bg-amber-500",
@@ -107,6 +110,18 @@ export default function RaporlarPage() {
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DETAIL_PAGE_SIZE_DEFAULT);
+
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(
+    null
+  );
+  const [selectedHistory, setSelectedHistory] = useState<
+    WorkOrderStatusHistory[]
+  >([]);
+  const [selectedAttachments, setSelectedAttachments] = useState<
+    WorkOrderAttachment[]
+  >([]);
+  const [detailModalLoading, setDetailModalLoading] = useState(false);
 
   const fetchReport = useCallback(async () => {
     setReportLoading(true);
@@ -189,7 +204,7 @@ export default function RaporlarPage() {
       const total = assigned.length;
       return {
         id: tech.id,
-        name: tech.user?.fullName || `Teknisyen #${tech.id}`,
+        name: tech.user?.fullName || "Teknisyen",
         region: tech.region?.name || "—",
         total,
         open: total - resolved,
@@ -220,7 +235,6 @@ export default function RaporlarPage() {
           value: s.value,
         })),
         workOrders: filteredWorkOrders.map((wo) => ({
-          id: wo.id,
           customer: wo.customer?.fullName || "-",
           device: wo.device?.serialNumber || "-",
           technician: wo.technician?.user?.fullName || "-",
@@ -240,6 +254,35 @@ export default function RaporlarPage() {
     } catch {
       toast.error("PDF oluşturulamadı");
     }
+  };
+
+  const openWorkOrderDetail = async (wo: WorkOrder) => {
+    setSelectedWorkOrder(wo);
+    setSelectedHistory([]);
+    setSelectedAttachments([]);
+    setDetailModalOpen(true);
+    setDetailModalLoading(true);
+    try {
+      const [history, attachments] = await Promise.all([
+        workOrderService.getHistory(wo.id).catch(() => [] as WorkOrderStatusHistory[]),
+        workOrderService
+          .getAttachments(wo.id)
+          .catch(() => [] as WorkOrderAttachment[]),
+      ]);
+      setSelectedHistory(history);
+      setSelectedAttachments(attachments);
+    } catch {
+      toast.error("İş emri detayı yüklenemedi");
+    } finally {
+      setDetailModalLoading(false);
+    }
+  };
+
+  const closeWorkOrderDetail = () => {
+    setDetailModalOpen(false);
+    setSelectedWorkOrder(null);
+    setSelectedHistory([]);
+    setSelectedAttachments([]);
   };
 
   return (
@@ -394,7 +437,7 @@ export default function RaporlarPage() {
 
       <SectionCard
         title="İş Emri Detay Raporu"
-        description="Tarih aralığındaki tüm iş emirlerinin listesi"
+        description="Satıra tıklayarak iş emri detayını görüntüleyin ve PDF indirin"
         noPadding
       >
         {detailLoading ? (
@@ -417,7 +460,7 @@ export default function RaporlarPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
+                    <TableHead>İş Emri</TableHead>
                     <TableHead>Müşteri</TableHead>
                     <TableHead>Cihaz</TableHead>
                     <TableHead>Teknisyen</TableHead>
@@ -428,9 +471,18 @@ export default function RaporlarPage() {
                 </TableHeader>
                 <TableBody>
                   {paginatedWorkOrders.map((wo) => (
-                    <TableRow key={wo.id}>
-                      <TableCell className="font-medium text-slate-900">#{wo.id}</TableCell>
-                      <TableCell>{wo.customer?.fullName || "—"}</TableCell>
+                    <TableRow
+                      key={wo.id}
+                      className="cursor-pointer"
+                      onClick={() => void openWorkOrderDetail(wo)}
+                      title="Detayı görüntüle"
+                    >
+                      <TableCell className="font-medium text-primary-700">
+                        WO-{wo.id}
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-900">
+                        {wo.customer?.fullName || "—"}
+                      </TableCell>
                       <TableCell>{wo.device?.serialNumber || "—"}</TableCell>
                       <TableCell>{wo.technician?.user?.fullName || "—"}</TableCell>
                       <TableCell>
@@ -519,6 +571,22 @@ export default function RaporlarPage() {
           </div>
         )}
       </SectionCard>
+
+      <WorkOrderPdfModal
+        isOpen={detailModalOpen}
+        onClose={closeWorkOrderDetail}
+        workOrder={selectedWorkOrder}
+        history={selectedHistory}
+        attachments={selectedAttachments}
+      />
+
+      {detailModalOpen && detailModalLoading && (
+        <div className="pointer-events-none fixed inset-0 z-[60] flex items-start justify-center pt-24">
+          <span className="rounded-full bg-navy/80 px-3 py-1.5 text-xs text-white shadow-lg">
+            Detay yükleniyor…
+          </span>
+        </div>
+      )}
     </div>
   );
 }

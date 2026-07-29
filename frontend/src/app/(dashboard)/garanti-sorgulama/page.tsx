@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/Badge";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { deviceService } from "@/services/deviceService";
 import { warrantyService } from "@/services/warrantyService";
 import { Device } from "@/types/device";
@@ -287,13 +286,6 @@ export default function GarantiSorgulamaPage() {
             )}
           </SectionCard>
         </div>
-
-        <SectionCard title="Son Sorgular" description="Geçmiş sorgu kayıtları">
-          <EmptyState
-            title="Veri yok"
-            description="Geçmiş sorgular yakında burada görüntülenecek"
-          />
-        </SectionCard>
       </div>
     </div>
   );

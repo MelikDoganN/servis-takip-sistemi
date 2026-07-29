@@ -12,16 +12,21 @@ export interface Technician {
   updatedAt: string;
 }
 
+/** POST /api/technicians — User + Technician birlikte oluşturulur */
 export interface CreateTechnicianRequest {
-  user: { id: number };
-  region?: { id: number } | null;
+  fullName: string;
+  email: string;
+  password: string;
+  phone?: string;
   whatsappNumber?: string;
+  regionId?: number | null;
   currentWorkload?: number;
   isAvailable?: boolean;
 }
 
+/** PUT /api/technicians/{id} — mevcut entity alanları */
 export interface UpdateTechnicianRequest {
-  user: { id: number };
+  user?: { id: number };
   region?: { id: number } | null;
   whatsappNumber?: string;
   currentWorkload?: number;

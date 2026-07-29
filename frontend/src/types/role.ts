@@ -27,10 +27,17 @@ export interface Role {
   createdAt: string;
 }
 
-/** Kullanıcı Yönetimi ekranında seçilebilir roller */
+/** Yeni kullanıcı oluştururken seçilebilir roller */
 export const MANAGEABLE_ROLES: BackendRoleName[] = [
   "ADMIN",
   "CENTER_OPERATOR",
+];
+
+/** Rol değiştirme modalında gösterilen roller */
+export const ASSIGNABLE_ROLES: BackendRoleName[] = [
+  "ADMIN",
+  "CENTER_OPERATOR",
+  "TECHNICIAN",
 ];
 
 export const ROLE_LABELS: Record<string, string> = {

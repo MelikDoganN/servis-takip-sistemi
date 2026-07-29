@@ -9,15 +9,17 @@ import {
   MonitorSmartphone,
   ClipboardList,
   UserCog,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { customerService } from "@/services/customerService";
 import { deviceService } from "@/services/deviceService";
 import { workOrderService } from "@/services/workOrderService";
 import { userService } from "@/services/userService";
+import { technicianService } from "@/services/technicianService";
 import { WORK_ORDER_STATUS_LABELS } from "@/types/workOrder";
 
-type ResultCategory = "customer" | "device" | "workorder" | "user";
+type ResultCategory = "customer" | "device" | "workorder" | "user" | "technician";
 
 interface SearchResult {
   id: string;
@@ -39,6 +41,10 @@ const CATEGORY_META: Record<
   workorder: {
     label: "İş Emirleri",
     icon: <ClipboardList className="h-3.5 w-3.5" />,
+  },
+  technician: {
+    label: "Teknisyenler",
+    icon: <Wrench className="h-3.5 w-3.5" />,
   },
   user: { label: "Kullanıcılar", icon: <UserCog className="h-3.5 w-3.5" /> },
 };
@@ -93,12 +99,14 @@ export function GlobalSearch() {
     async function run() {
       const items: SearchResult[] = [];
 
-      const [customers, devices, workOrders, users] = await Promise.all([
-        customerService.getAll(200).catch(() => []),
-        deviceService.getAll(200).catch(() => []),
-        workOrderService.getAll(200).catch(() => []),
-        userService.getAll(200).catch(() => []),
-      ]);
+      const [customers, devices, workOrders, users, technicians] =
+        await Promise.all([
+          customerService.getAll(200).catch(() => []),
+          deviceService.getAll(200).catch(() => []),
+          workOrderService.getAll(200).catch(() => []),
+          userService.getAll(200).catch(() => []),
+          technicianService.getAll().catch(() => []),
+        ]);
 
       customers
         .filter(
@@ -143,19 +151,40 @@ export function GlobalSearch() {
       workOrders
         .filter(
           (wo) =>
-            String(wo.id).includes(q) ||
             wo.description?.toLowerCase().includes(q) ||
             wo.customer?.fullName?.toLowerCase().includes(q) ||
-            wo.device?.serialNumber?.toLowerCase().includes(q)
+            wo.device?.serialNumber?.toLowerCase().includes(q) ||
+            wo.technician?.user?.fullName?.toLowerCase().includes(q)
         )
         .slice(0, MAX_PER_CATEGORY)
         .forEach((wo) =>
           items.push({
             id: `workorder-${wo.id}`,
             category: "workorder",
-            title: `#${wo.id} — ${wo.customer?.fullName || "Müşteri yok"}`,
-            subtitle: WORK_ORDER_STATUS_LABELS[wo.status] ?? wo.status,
-            href: `/is-emirleri?q=${encodeURIComponent(String(wo.id))}`,
+            title: wo.customer?.fullName || "İş emri",
+            subtitle: `${WORK_ORDER_STATUS_LABELS[wo.status] ?? wo.status}${
+              wo.device?.serialNumber ? ` · ${wo.device.serialNumber}` : ""
+            }`,
+            href: `/is-emirleri?q=${encodeURIComponent(wo.customer?.fullName || wo.device?.serialNumber || "")}`,
+          })
+        );
+
+      technicians
+        .filter(
+          (t) =>
+            t.user?.fullName?.toLowerCase().includes(q) ||
+            t.user?.email?.toLowerCase().includes(q) ||
+            t.whatsappNumber?.toLowerCase().includes(q) ||
+            t.region?.name?.toLowerCase().includes(q)
+        )
+        .slice(0, MAX_PER_CATEGORY)
+        .forEach((t) =>
+          items.push({
+            id: `technician-${t.id}`,
+            category: "technician",
+            title: t.user?.fullName || "Teknisyen",
+            subtitle: t.region?.name || t.user?.email || undefined,
+            href: `/teknisyenler?q=${encodeURIComponent(t.user?.fullName || "")}`,
           })
         );
 
@@ -217,7 +246,7 @@ export function GlobalSearch() {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder="Müşteri, cihaz, iş emri, kullanıcı ara..."
+        placeholder="Müşteri, cihaz, iş emri, teknisyen, kullanıcı ara..."
         className="h-10 w-56 rounded-xl border border-slate-200 bg-surface pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-accent focus:bg-white focus:ring-4 focus:ring-accent/20 lg:w-72"
         aria-label="Genel arama"
       />

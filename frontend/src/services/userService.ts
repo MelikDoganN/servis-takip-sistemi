@@ -3,6 +3,7 @@ import { PageResponse } from "@/types/api";
 import {
   CreateUserRequest,
   CreateUserResponse,
+  UpdateUserRequest,
   User,
 } from "@/types/user";
 
@@ -34,6 +35,19 @@ export const userService = {
     return apiClient<CreateUserResponse>("/api/users", {
       method: "POST",
       body: data,
+    });
+  },
+
+  /** Profil / aktiflik güncelleme — PUT /api/users/{id} */
+  update(id: number, data: UpdateUserRequest): Promise<User> {
+    const body: Record<string, string> = {};
+    if (data.fullName !== undefined) body.fullName = data.fullName;
+    if (data.email !== undefined) body.email = data.email;
+    if (data.phone !== undefined) body.phone = data.phone ?? "";
+    if (data.isActive !== undefined) body.isActive = String(data.isActive);
+    return apiClient<User>(`/api/users/${id}`, {
+      method: "PUT",
+      body,
     });
   },
 

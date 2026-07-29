@@ -22,12 +22,15 @@ import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { Eye, Pencil, Trash2, MonitorSmartphone } from "lucide-react";
+import { canDeleteRecords, canManageRecords } from "@/lib/auth";
 
 type ViewMode = "table" | "grid";
 type ModalMode = "create" | "edit" | "detail" | "delete" | null;
 
 export default function CihazlarPage() {
   const toast = useToast();
+  const canManage = canManageRecords();
+  const canDelete = canDeleteRecords();
   const [devices, setDevices] = useState<Device[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,14 +186,18 @@ export default function CihazlarPage() {
         <Eye className="h-3.5 w-3.5" />
         <span className="hidden lg:inline">Detay</span>
       </Button>
-      <Button variant="outline" size="sm" onClick={() => openEdit(device.id)} title="Düzenle">
-        <Pencil className="h-3.5 w-3.5" />
-        <span className="hidden lg:inline">Düzenle</span>
-      </Button>
-      <Button variant="danger" size="sm" onClick={() => openDelete(device.id)} title="Sil">
-        <Trash2 className="h-3.5 w-3.5" />
-        <span className="hidden lg:inline">Sil</span>
-      </Button>
+      {canManage && (
+        <Button variant="outline" size="sm" onClick={() => openEdit(device.id)} title="Düzenle">
+          <Pencil className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">Düzenle</span>
+        </Button>
+      )}
+      {canDelete && (
+        <Button variant="danger" size="sm" onClick={() => openDelete(device.id)} title="Sil">
+          <Trash2 className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">Sil</span>
+        </Button>
+      )}
     </div>
   );
 
@@ -212,9 +219,11 @@ export default function CihazlarPage() {
         description="Kayıtlı cihazları görüntüleyin ve yönetin"
         icon={<MonitorSmartphone className="h-5 w-5" />}
         action={
-          <Button onClick={() => setModalMode("create")} disabled={customers.length === 0}>
-            Yeni Cihaz
-          </Button>
+          canManage ? (
+            <Button onClick={() => setModalMode("create")} disabled={customers.length === 0}>
+              Yeni Cihaz
+            </Button>
+          ) : undefined
         }
       />
 
@@ -382,14 +391,11 @@ export default function CihazlarPage() {
           ) : detail ? (
             <DetailList
               items={[
-                { label: "ID", value: detail.id },
                 { label: "Seri No", value: detail.serialNumber },
                 { label: "Satın Alma", value: formatDate(detail.purchaseDate) },
                 { label: "Kurulum", value: formatDate(detail.installationDate) },
-                { label: "Müşteri ID", value: detail.customer?.id ?? "—" },
                 { label: "Müşteri", value: detail.customer?.fullName || "—" },
                 { label: "Müşteri Telefon", value: detail.customer?.phone || "—" },
-                { label: "Model ID", value: detail.model?.id ?? "—" },
                 { label: "Model", value: detail.model?.name || "—" },
                 { label: "Marka", value: detail.model?.brand?.name || "—" },
                 { label: "Oluşturulma", value: formatDateTime(detail.createdAt) },

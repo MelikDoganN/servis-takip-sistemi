@@ -21,6 +21,13 @@ export interface CreateUserRequest {
   role: Extract<BackendRoleName, "ADMIN" | "CENTER_OPERATOR">;
 }
 
+export interface UpdateUserRequest {
+  fullName?: string;
+  email?: string;
+  phone?: string | null;
+  isActive?: boolean;
+}
+
 export interface CreateUserResponse {
   message: string;
   id: number;

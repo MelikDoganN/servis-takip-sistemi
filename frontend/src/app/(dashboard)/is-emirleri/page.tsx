@@ -54,9 +54,15 @@ import {
 } from "@/types/workOrder";
 import { formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import {
+  canManageRecords,
+  getAuthEmail,
+  isTechnicianOnly,
+} from "@/lib/auth";
+import { WorkOrderPdfModal } from "@/components/workorders/WorkOrderPdfModal";
 
 type ViewMode = "list" | "kanban";
-type ModalMode = "create" | "detail" | "status" | "assign" | null;
+type ModalMode = "create" | "detail" | "status" | "assign" | "pdf" | null;
 
 function statusBadgeVariant(
   status: WorkOrderStatus
@@ -82,6 +88,9 @@ const SERVICE_TYPES: ServiceType[] = ["WARRANTY", "PAID"];
 
 export default function IsEmirleriPage() {
   const toast = useToast();
+  const canCreate = canManageRecords();
+  const techOnly = isTechnicianOnly();
+  const authEmail = getAuthEmail();
 
   const [view, setView] = useState<ViewMode>("list");
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -111,7 +120,6 @@ export default function IsEmirleriPage() {
   const [attachments, setAttachments] = useState<WorkOrderAttachment[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
 
   const [customerId, setCustomerId] = useState("");
   const [deviceId, setDeviceId] = useState("");
@@ -178,18 +186,26 @@ export default function IsEmirleriPage() {
   }, [view, loadList, loadKanban]);
 
   const filtered = useMemo(() => {
+    let list = workOrders;
+    if (techOnly && authEmail) {
+      list = list.filter(
+        (wo) =>
+          wo.technician?.user?.email?.toLowerCase() === authEmail.toLowerCase()
+      );
+    }
     const q = search.toLowerCase().trim();
-    if (!q) return workOrders;
-    return workOrders.filter((wo) => {
+    if (!q) return list;
+    return list.filter((wo) => {
       return (
-        String(wo.id).includes(q) ||
         wo.description?.toLowerCase().includes(q) ||
         wo.customer?.fullName?.toLowerCase().includes(q) ||
         wo.device?.serialNumber?.toLowerCase().includes(q) ||
-        wo.status?.toLowerCase().includes(q)
+        wo.technician?.user?.fullName?.toLowerCase().includes(q) ||
+        wo.status?.toLowerCase().includes(q) ||
+        (WORK_ORDER_STATUS_LABELS[wo.status] ?? "").toLowerCase().includes(q)
       );
     });
-  }, [workOrders, search]);
+  }, [workOrders, search, techOnly, authEmail]);
 
   useEffect(() => {
     setPage(1);
@@ -279,17 +295,7 @@ export default function IsEmirleriPage() {
 
   const handleDownloadPdf = async () => {
     if (!selected) return;
-    setPdfLoading(true);
-    setActionError("");
-    try {
-      await workOrderService.downloadPdf(selected.id);
-      toast.success("PDF indirildi");
-    } catch (err) {
-      const apiErr = err as ApiError;
-      setActionError(apiErr.message || "PDF indirilemedi");
-    } finally {
-      setPdfLoading(false);
-    }
+    setModalMode("pdf");
   };
 
   const openStatus = (wo: WorkOrder) => {
@@ -426,10 +432,12 @@ export default function IsEmirleriPage() {
               <RefreshCw className="mr-1.5 h-4 w-4" />
               Yenile
             </Button>
-            <Button type="button" onClick={openCreate}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Yeni İş Emri
-            </Button>
+            {canCreate && (
+              <Button type="button" onClick={openCreate}>
+                <Plus className="mr-1.5 h-4 w-4" />
+                Yeni İş Emri
+              </Button>
+            )}
           </div>
         }
       />
@@ -477,9 +485,9 @@ export default function IsEmirleriPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>ID</TableHead>
                       <TableHead>Müşteri</TableHead>
                       <TableHead>Cihaz</TableHead>
+                      <TableHead>Teknisyen</TableHead>
                       <TableHead>Durum</TableHead>
                       <TableHead>Öncelik</TableHead>
                       <TableHead>Oluşturma</TableHead>
@@ -490,11 +498,13 @@ export default function IsEmirleriPage() {
                     {paginated.map((wo) => (
                       <TableRow key={wo.id}>
                         <TableCell className="font-medium text-slate-900">
-                          #{wo.id}
+                          {wo.customer?.fullName || "—"}
                         </TableCell>
-                        <TableCell>{wo.customer?.fullName || "—"}</TableCell>
                         <TableCell>
                           {wo.device?.serialNumber || "—"}
+                        </TableCell>
+                        <TableCell>
+                          {wo.technician?.user?.fullName || "—"}
                         </TableCell>
                         <TableCell>
                           <Badge variant={statusBadgeVariant(wo.status)}>
@@ -512,7 +522,7 @@ export default function IsEmirleriPage() {
                             >
                               Detay
                             </Button>
-                            {canAssign(wo) && (
+                            {canCreate && canAssign(wo) && (
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -547,12 +557,15 @@ export default function IsEmirleriPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-slate-900">#{wo.id}</p>
+                        <p className="font-semibold text-slate-900">
+                          {wo.customer?.fullName || "Müşteri yok"}
+                        </p>
                         <p className="text-sm text-slate-600">
-                          {wo.customer?.fullName || "—"}
+                          {wo.device?.serialNumber || "—"}
                         </p>
                         <p className="mt-1 text-xs text-slate-400">
-                          {wo.device?.serialNumber || "—"}
+                          {wo.technician?.user?.fullName || "Teknisyen atanmadı"} ·{" "}
+                          {formatDateTime(wo.createdAt)}
                         </p>
                       </div>
                       <Badge variant={statusBadgeVariant(wo.status)}>
@@ -567,7 +580,7 @@ export default function IsEmirleriPage() {
                       >
                         Detay
                       </Button>
-                      {canAssign(wo) && (
+                      {canCreate && canAssign(wo) && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -613,7 +626,14 @@ export default function IsEmirleriPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
               {WORK_ORDER_STATUSES.map((status) => {
-                const items = kanban[status] ?? [];
+                let items = kanban[status] ?? [];
+                if (techOnly && authEmail) {
+                  items = items.filter(
+                    (wo) =>
+                      wo.technician?.user?.email?.toLowerCase() ===
+                      authEmail.toLowerCase()
+                  );
+                }
                 return (
                   <div
                     key={status}
@@ -644,13 +664,14 @@ export default function IsEmirleriPage() {
                             )}
                           >
                             <p className="text-sm font-semibold text-slate-900">
-                              #{wo.id}
-                            </p>
-                            <p className="mt-0.5 truncate text-xs text-slate-600">
                               {wo.customer?.fullName || "Müşteri yok"}
                             </p>
-                            <p className="mt-1 truncate text-xs text-slate-400">
+                            <p className="mt-0.5 truncate text-xs text-slate-600">
                               {wo.device?.serialNumber || "—"}
+                            </p>
+                            <p className="mt-1 truncate text-xs text-slate-400">
+                              {wo.technician?.user?.fullName || "Atanmadı"} ·{" "}
+                              {wo.priority || "—"}
                             </p>
                           </button>
                         ))
@@ -780,7 +801,11 @@ export default function IsEmirleriPage() {
       <Modal
         isOpen={modalMode === "detail"}
         onClose={closeModal}
-        title={selected ? `İş Emri #${selected.id}` : "İş Emri Detayı"}
+        title={
+          selected?.customer?.fullName
+            ? `İş Emri — ${selected.customer.fullName}`
+            : "İş Emri Detayı"
+        }
         size="lg"
       >
         {detailLoading ? (
@@ -808,11 +833,7 @@ export default function IsEmirleriPage() {
                 },
                 {
                   label: "Teknisyen",
-                  value:
-                    selected.technician?.user?.fullName ||
-                    (selected.technician
-                      ? `#${selected.technician.id}`
-                      : "—"),
+                  value: selected.technician?.user?.fullName || "Atanmadı",
                 },
                 {
                   label: "Oluşturan",
@@ -848,13 +869,12 @@ export default function IsEmirleriPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  loading={pdfLoading}
                   onClick={() => void handleDownloadPdf()}
                 >
                   <FileText className="mr-1.5 h-4 w-4" />
-                  PDF İndir
+                  PDF Görüntüle
                 </Button>
-                {canAssign(selected) && (
+                {canCreate && canAssign(selected) && (
                   <Button
                     type="button"
                     variant="secondary"
@@ -882,11 +902,10 @@ export default function IsEmirleriPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  loading={pdfLoading}
                   onClick={() => void handleDownloadPdf()}
                 >
                   <FileText className="mr-1.5 h-4 w-4" />
-                  PDF İndir
+                  PDF Görüntüle
                 </Button>
               </div>
             )}
@@ -987,8 +1006,8 @@ export default function IsEmirleriPage() {
         isOpen={modalMode === "status"}
         onClose={closeModal}
         title={
-          selected
-            ? `Durum Değiştir — #${selected.id}`
+          selected?.customer?.fullName
+            ? `Durum Değiştir — ${selected.customer.fullName}`
             : "Durum Değiştir"
         }
       >
@@ -1040,8 +1059,8 @@ export default function IsEmirleriPage() {
         isOpen={modalMode === "assign"}
         onClose={closeModal}
         title={
-          selected
-            ? `Teknisyen Ata — #${selected.id}`
+          selected?.customer?.fullName
+            ? `Teknisyen Ata — ${selected.customer.fullName}`
             : "Teknisyen Ata"
         }
         size="lg"
@@ -1050,8 +1069,8 @@ export default function IsEmirleriPage() {
           <div className="space-y-4">
             {actionError && <ErrorMessage message={actionError} />}
             <p className="text-sm text-slate-600">
-              İş emri: <strong>#{selected.id}</strong> ·{" "}
-              {selected.customer?.fullName || "—"} ·{" "}
+              İş emri: <strong>{selected.customer?.fullName || "—"}</strong> ·{" "}
+              {selected.device?.serialNumber || "—"} ·{" "}
               <Badge variant={statusBadgeVariant(selected.status)}>
                 {WORK_ORDER_STATUS_LABELS[selected.status]}
               </Badge>
@@ -1078,7 +1097,7 @@ export default function IsEmirleriPage() {
                 >
                   {availableTechnicians.map((t) => (
                     <option key={t.id} value={t.id}>
-                      #{t.id} — {t.user?.fullName || "İsimsiz"} (yük:{" "}
+                      {t.user?.fullName || "İsimsiz"} (yük:{" "}
                       {t.currentWorkload ?? 0}
                       {t.region?.name ? `, ${t.region.name}` : ""})
                     </option>
@@ -1098,7 +1117,7 @@ export default function IsEmirleriPage() {
                         onClick={() => setAssignTechnicianId(String(t.id))}
                       >
                         <span className="font-medium">
-                          {t.user?.fullName || `Teknisyen #${t.id}`}
+                          {t.user?.fullName || "Teknisyen"}
                         </span>
                         {" · "}yük {t.currentWorkload ?? 0}
                         {t.whatsappNumber ? ` · ${t.whatsappNumber}` : ""}
@@ -1125,6 +1144,14 @@ export default function IsEmirleriPage() {
           </div>
         )}
       </Modal>
+
+      <WorkOrderPdfModal
+        isOpen={modalMode === "pdf"}
+        onClose={() => setModalMode("detail")}
+        workOrder={selected}
+        history={history}
+        attachments={attachments}
+      />
     </div>
   );
 }

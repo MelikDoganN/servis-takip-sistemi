@@ -88,6 +88,37 @@ export function getAuthRoles(): string[] {
     });
 }
 
+/** UI yardımcı — sunucu yetkisi değiştirmez. */
+export function hasRole(...roles: string[]): boolean {
+  const current = getAuthRoles();
+  return roles.some((r) => {
+    const auth = r.startsWith("ROLE_") ? r : `ROLE_${r}`;
+    return current.includes(auth);
+  });
+}
+
+export function isAdmin(): boolean {
+  return hasRole("ROLE_ADMIN");
+}
+
+export function canManageRecords(): boolean {
+  return hasRole("ROLE_ADMIN", "ROLE_CENTER_OPERATOR", "ROLE_REGION_MANAGER");
+}
+
+export function canDeleteRecords(): boolean {
+  return hasRole("ROLE_ADMIN");
+}
+
+export function isTechnicianOnly(): boolean {
+  const roles = getAuthRoles();
+  return (
+    roles.includes("ROLE_TECHNICIAN") &&
+    !roles.includes("ROLE_ADMIN") &&
+    !roles.includes("ROLE_CENTER_OPERATOR") &&
+    !roles.includes("ROLE_REGION_MANAGER")
+  );
+}
+
 export function isTokenExpired(): boolean {
   const payload = getTokenPayload();
   if (!payload?.exp) return false;

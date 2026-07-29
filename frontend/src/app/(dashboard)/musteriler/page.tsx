@@ -20,11 +20,14 @@ import { formatDateTime } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import { Eye, Pencil, Trash2, Users } from "lucide-react";
+import { canDeleteRecords, canManageRecords } from "@/lib/auth";
 
 type ModalMode = "create" | "edit" | "detail" | "delete" | null;
 
 export default function MusterilerPage() {
   const toast = useToast();
+  const canManage = canManageRecords();
+  const canDelete = canDeleteRecords();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -195,9 +198,11 @@ export default function MusterilerPage() {
         description="Müşteri portföyünüzü yönetin ve takip edin"
         icon={<Users className="h-5 w-5" />}
         action={
-          <Button onClick={() => setModalMode("create")}>
-            Yeni Müşteri
-          </Button>
+          canManage ? (
+            <Button onClick={() => setModalMode("create")}>
+              Yeni Müşteri
+            </Button>
+          ) : undefined
         }
       />
 
@@ -244,7 +249,7 @@ export default function MusterilerPage() {
                 : "Arama veya filtre kriterlerinizi değiştirmeyi deneyin"
             }
             action={
-              customers.length === 0 ? (
+              canManage && customers.length === 0 ? (
                 <Button onClick={() => setModalMode("create")}>İlk Müşteriyi Ekle</Button>
               ) : undefined
             }
@@ -281,14 +286,18 @@ export default function MusterilerPage() {
                             <Eye className="h-3.5 w-3.5" />
                             <span className="hidden lg:inline">Detay</span>
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => openEdit(customer.id)} title="Düzenle">
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline">Düzenle</span>
-                          </Button>
-                          <Button variant="danger" size="sm" onClick={() => openDelete(customer.id)} title="Sil">
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline">Sil</span>
-                          </Button>
+                          {canManage && (
+                            <Button variant="outline" size="sm" onClick={() => openEdit(customer.id)} title="Düzenle">
+                              <Pencil className="h-3.5 w-3.5" />
+                              <span className="hidden lg:inline">Düzenle</span>
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="danger" size="sm" onClick={() => openDelete(customer.id)} title="Sil">
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="hidden lg:inline">Sil</span>
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -335,7 +344,6 @@ export default function MusterilerPage() {
           ) : detail ? (
             <DetailList
               items={[
-                { label: "ID", value: detail.id },
                 { label: "Ad Soyad", value: detail.fullName },
                 { label: "Telefon", value: detail.phone || "—" },
                 { label: "WhatsApp", value: detail.whatsappNumber || "—" },

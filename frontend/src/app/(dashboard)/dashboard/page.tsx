@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   ClipboardList,
   ArrowRight,
-  AlertTriangle,
   CircleDot,
   CheckCircle2,
   XCircle,
@@ -19,8 +18,7 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { ChartPlaceholder } from "@/components/ui/ChartPlaceholder";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { SkeletonCard, SkeletonList } from "@/components/ui/Skeleton";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { dashboardService } from "@/services/dashboardService";
 import { DashboardStats } from "@/types/dashboard";
 import { ApiError } from "@/types/api";
@@ -74,7 +72,6 @@ export default function DashboardPage() {
           <SkeletonCard />
           <SkeletonCard />
         </div>
-        <SkeletonList />
       </div>
     );
   }
@@ -157,30 +154,6 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
         <ChartPlaceholder title="Aylık İş Emri Trendi" />
         <ChartPlaceholder title="Servis Tamamlanma Oranı" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
-        <SectionCard title="Son Aktiviteler" description="Sistemdeki son hareketler">
-          <EmptyState
-            title="Veri yok"
-            description="Yakında burada görüntülenecek"
-          />
-        </SectionCard>
-
-        <SectionCard title="Yaklaşan Teslimatlar" description="Parça ve cihaz teslim takibi">
-          <EmptyState
-            title="Veri yok"
-            description="Yakında burada görüntülenecek"
-          />
-        </SectionCard>
-
-        <SectionCard title="Kritik Durumlar" description="Acil müdahale gerektiren kayıtlar">
-          <EmptyState
-            title="Veri yok"
-            description="Yakında burada görüntülenecek"
-            icon={<AlertTriangle className="h-7 w-7 text-amber-500" strokeWidth={1.5} />}
-          />
-        </SectionCard>
       </div>
     </div>
   );
