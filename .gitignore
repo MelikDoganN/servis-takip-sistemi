@@ -40,3 +40,6 @@ frontend/.next/
 # Environment
 .env
 .env.local
+
+whatsapp-bot/.env
+backend/src/main/resources/application-local.properties

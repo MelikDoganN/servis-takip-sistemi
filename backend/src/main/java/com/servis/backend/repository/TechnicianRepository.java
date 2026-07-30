@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TechnicianRepository extends JpaRepository<Technician, Long> {
-
+	Optional<Technician> findByWhatsappNumber(String whatsappNumber);
     // İş yükü belirli bir değerden az olan ve müsait olan teknisyenleri listele
     List<Technician> findByIsAvailableTrueAndCurrentWorkloadLessThan(Integer maxWorkload);
 
@@ -16,4 +16,5 @@ public interface TechnicianRepository extends JpaRepository<Technician, Long> {
 
     // Bölgeye göre müsait teknisyenler
     List<Technician> findByRegionIdAndIsAvailableTrue(Long regionId);
+    
 }

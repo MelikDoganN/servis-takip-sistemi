@@ -1,11 +1,13 @@
 package com.servis.backend.controller;
 
+import com.servis.backend.entity.Technician;
 import com.servis.backend.entity.User;
 import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.entity.WorkOrderAttachment;
 import com.servis.backend.entity.WorkOrderStatusHistory;
 import com.servis.backend.security.WorkOrderAccessGuard;
 import com.servis.backend.service.PdfService;
+import com.servis.backend.service.TechnicianService;
 import com.servis.backend.service.WorkOrderAttachmentService;
 import com.servis.backend.service.WorkOrderService;
 
@@ -42,14 +44,25 @@ public class WorkOrderController {
 
     @Autowired
     private WorkOrderAccessGuard workOrderAccessGuard;
-    // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün
+
+    @Autowired
+    private TechnicianService technicianService;  // EKLENDİ
+
+    // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün + Teknisyen filtresi (17. Gün)
     @GetMapping
     public Page<WorkOrder> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String technicianWhatsapp) {  // YENİ PARAMETRE
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        // Eğer technicianWhatsapp varsa, teknisyene göre filtrele (17. Gün)
+        if (technicianWhatsapp != null && !technicianWhatsapp.isEmpty()) {
+            Technician technician = technicianService.findByWhatsappNumber(technicianWhatsapp);
+            return workOrderService.getWorkOrdersByTechnicianId(technician.getId(), pageable);
+        }
 
         if (status != null && !status.isEmpty()) {
             return workOrderService.getWorkOrdersByStatus(status, pageable);

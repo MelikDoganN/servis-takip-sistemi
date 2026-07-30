@@ -44,6 +44,12 @@ public class TechnicianService {
                 .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + id));
     }
 
+    // WhatsApp numarasına göre teknisyen bul (17. gün bot için)
+    public Technician findByWhatsappNumber(String whatsappNumber) {
+        return technicianRepository.findByWhatsappNumber(whatsappNumber)
+                .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + whatsappNumber));
+    }
+
     /**
      * Önce TECHNICIAN rolüyle User oluşturur, sonra Technician kaydına bağlar.
      */

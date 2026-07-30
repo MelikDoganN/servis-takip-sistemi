@@ -27,7 +27,7 @@ public class WorkOrderService {
     @Autowired
     private TechnicianRepository technicianRepository;
 
-    // === LİSTELEME (Sayfalama Destekli) - 11. Gün ===
+    // === LİSTELEME (Sayfalama Destekli) ===
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
         return workOrderRepository.findAll(pageable);
     }
@@ -36,7 +36,12 @@ public class WorkOrderService {
         return workOrderRepository.findByStatus(status, pageable);
     }
 
-    // === LİSTELEME (Sayfalama Yok) ===
+    // === TEKNİSYEN ID'YE GÖRE LİSTELEME (17. Gün) ===
+    public Page<WorkOrder> getWorkOrdersByTechnicianId(Long technicianId, Pageable pageable) {
+        return workOrderRepository.findByTechnicianId(technicianId, pageable);
+    }
+
+    // === LİSTELEME (Sayfalama Yok - Eski Metotlar) ===
     public List<WorkOrder> getAllWorkOrders() {
         return workOrderRepository.findAll();
     }
@@ -55,7 +60,7 @@ public class WorkOrderService {
         return saved;
     }
 
-    // === DURUM GÜNCELLEME (State Machine) ===
+    // === DURUM GÜNCELLEME (STATE MACHINE) ===
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
@@ -100,7 +105,7 @@ public class WorkOrderService {
         return saved;
     }
 
-    // === DURUM GEÇİŞ KONTROLÜ (State Machine Kuralları) ===
+    // === DURUM GEÇİŞ KONTROLÜ (STATE MACHINE KURALLARI) ===
     private void validateTransition(String oldStatus, String newStatus) {
         switch (oldStatus) {
             case "OPEN" -> {
@@ -136,12 +141,13 @@ public class WorkOrderService {
         historyRepository.save(history);
     }
 
-    // === KANBAN PANOSU (Duruma göre gruplama) - 12. Gün ===
+    // === KANBAN (12. Gün) ===
     public Map<String, List<WorkOrder>> getKanbanGroupedByStatus() {
         List<WorkOrder> all = workOrderRepository.findAll();
         return all.stream().collect(Collectors.groupingBy(WorkOrder::getStatus));
     }
-    
+
+    // === DURUM GEÇMİŞİ (13. Gün) ===
     public List<WorkOrderStatusHistory> getStatusHistory(Long workOrderId) {
         return historyRepository.findByWorkOrderIdOrderByCreatedAtDesc(workOrderId);
     }
