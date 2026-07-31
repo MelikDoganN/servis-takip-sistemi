@@ -54,14 +54,18 @@ public class WorkOrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String technicianWhatsapp) {  // YENİ PARAMETRE
+            @RequestParam(required = false) String technicianWhatsapp) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        // Eğer technicianWhatsapp varsa, teknisyene göre filtrele (17. Gün)
         if (technicianWhatsapp != null && !technicianWhatsapp.isEmpty()) {
-            Technician technician = technicianService.findByWhatsappNumber(technicianWhatsapp);
-            return workOrderService.getWorkOrdersByTechnicianId(technician.getId(), pageable);
+            try {
+                Technician technician = technicianService.findByWhatsappNumber(technicianWhatsapp);
+                return workOrderService.getWorkOrdersByTechnicianId(technician.getId(), pageable);
+            } catch (RuntimeException e) {
+                // Teknisyen bulunamadı, boş liste dön (500 atmak yerine)
+                return Page.empty(pageable);
+            }
         }
 
         if (status != null && !status.isEmpty()) {
@@ -69,7 +73,6 @@ public class WorkOrderController {
         }
         return workOrderService.getAllWorkOrders(pageable);
     }
-
     // 2. ID'YE GÖRE GETİR
     @GetMapping("/{id}")
     public ResponseEntity<WorkOrder> getById(@PathVariable Long id) {
