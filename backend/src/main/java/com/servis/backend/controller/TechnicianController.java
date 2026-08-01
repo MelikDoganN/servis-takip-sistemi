@@ -55,4 +55,14 @@ public class TechnicianController {
     public List<Technician> getAvailableTechnicians(@RequestParam(defaultValue = "5") Integer maxWorkload) {
         return technicianService.getAvailableTechniciansWithMaxWorkload(maxWorkload);
     }
+    
+    @GetMapping("/by-whatsapp/{whatsappNumber}")
+    public ResponseEntity<?> getTechnicianByWhatsapp(@PathVariable String whatsappNumber) {
+        try {
+            Technician tech = technicianService.findByWhatsappNumber(whatsappNumber);
+            return ResponseEntity.ok(tech);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Teknisyen bulunamadı");
+        }
+    }
 }

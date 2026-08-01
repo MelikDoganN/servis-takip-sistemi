@@ -46,9 +46,8 @@ public class WorkOrderController {
     private WorkOrderAccessGuard workOrderAccessGuard;
 
     @Autowired
-    private TechnicianService technicianService;  // EKLENDİ
+    private TechnicianService technicianService;
 
-    // 1. LİSTELEME (Sayfalama + Filtreleme) - 11. Gün + Teknisyen filtresi (17. Gün)
     @GetMapping
     public Page<WorkOrder> getAll(
             @RequestParam(defaultValue = "0") int page,
@@ -63,7 +62,6 @@ public class WorkOrderController {
                 Technician technician = technicianService.findByWhatsappNumber(technicianWhatsapp);
                 return workOrderService.getWorkOrdersByTechnicianId(technician.getId(), pageable);
             } catch (RuntimeException e) {
-                // Teknisyen bulunamadı, boş liste dön (500 atmak yerine)
                 return Page.empty(pageable);
             }
         }
@@ -73,13 +71,29 @@ public class WorkOrderController {
         }
         return workOrderService.getAllWorkOrders(pageable);
     }
-    // 2. ID'YE GÖRE GETİR
+
     @GetMapping("/{id}")
-    public ResponseEntity<WorkOrder> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(workOrderService.getWorkOrderById(id));
+    public ResponseEntity<?> getById(
+            @PathVariable Long id,
+            @RequestParam(required = false) String phone) {
+
+        WorkOrder workOrder = workOrderService.getWorkOrderById(id);
+
+        // Müşteri yetki kontrolü (sadece phone parametresi geldiyse)
+        if (phone != null && !phone.isEmpty()) {
+            String customerPhone = workOrder.getCustomer().getWhatsappNumber();
+            if (customerPhone == null) {
+                customerPhone = workOrder.getCustomer().getPhone();
+            }
+            if (!phone.equals(customerPhone)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Bu iş emrine erişim yetkiniz yok."));
+            }
+        }
+
+        return ResponseEntity.ok(workOrder);
     }
 
-    // 3. YENİ İŞ EMRİ OLUŞTUR — createdBy JWT principal'dan alınır
     @PostMapping
     public ResponseEntity<WorkOrder> create(@Valid @RequestBody WorkOrder workOrder,
                                             @AuthenticationPrincipal UserDetails userDetails) {
@@ -88,7 +102,6 @@ public class WorkOrderController {
         return new ResponseEntity<>(workOrderService.createWorkOrder(workOrder), HttpStatus.CREATED);
     }
 
-    // 4. DURUM GÜNCELLE (State Machine - 8. Gün)
     @PutMapping("/{id}/status")
     public ResponseEntity<WorkOrder> updateStatus(
             @PathVariable Long id,
@@ -102,7 +115,6 @@ public class WorkOrderController {
         return ResponseEntity.ok(workOrderService.updateStatus(id, status, currentUser, channel));
     }
 
-    // 5. TEKNİSYEN ATA (9. Gün)
     @PutMapping("/{id}/assign/{technicianId}")
     public ResponseEntity<WorkOrder> assignTechnician(
             @PathVariable Long id,
@@ -115,19 +127,16 @@ public class WorkOrderController {
         return ResponseEntity.ok(workOrderService.assignTechnician(id, technicianId, currentUser));
     }
 
-    // 6. KANBAN PANOSU (12. Gün)
     @GetMapping("/kanban")
     public Map<String, List<WorkOrder>> getKanban() {
         return workOrderService.getKanbanGroupedByStatus();
     }
 
-    // 7. DURUM GEÇMİŞİ (13. Gün)
     @GetMapping("/{id}/history")
     public ResponseEntity<List<WorkOrderStatusHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(workOrderService.getStatusHistory(id));
     }
 
-    // 8. FOTOĞRAF YÜKLE (14. Gün)
     @PostMapping("/{id}/upload")
     public ResponseEntity<WorkOrderAttachment> uploadFile(
             @PathVariable Long id,
@@ -138,13 +147,11 @@ public class WorkOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(attachment);
     }
 
-    // 9. İŞ EMRİNE AİT TÜM FOTOĞRAFLARI LİSTELE (14. Gün)
     @GetMapping("/{id}/attachments")
     public ResponseEntity<List<WorkOrderAttachment>> getAttachments(@PathVariable Long id) {
         return ResponseEntity.ok(attachmentService.getAttachmentsByWorkOrderId(id));
     }
 
-    // 10. PDF ÇIKTISI OLUŞTUR (14. Gün)
     @GetMapping("/{id}/pdf")
     public ResponseEntity<byte[]> generatePdf(@PathVariable Long id) throws Exception {
         byte[] pdf = pdfService.generateWorkOrderPdf(id);
