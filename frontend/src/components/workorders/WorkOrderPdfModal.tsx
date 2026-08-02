@@ -12,6 +12,7 @@ import {
   WorkOrderAttachment,
   WorkOrderStatus,
   WorkOrderStatusHistory,
+  WorkOrderTimelineEvent,
 } from "@/types/workOrder";
 import { formatDateTime } from "@/lib/utils";
 import {
@@ -26,6 +27,7 @@ interface WorkOrderPdfModalProps {
   onClose: () => void;
   workOrder: WorkOrder | null;
   history?: WorkOrderStatusHistory[];
+  timeline?: WorkOrderTimelineEvent[];
   attachments?: WorkOrderAttachment[];
 }
 
@@ -36,12 +38,13 @@ function statusBadgeVariant(
     case "OPEN":
       return "warning";
     case "ASSIGNED":
-      return "info";
     case "IN_PROGRESS":
+    case "READY_FOR_DELIVERY":
       return "info";
     case "WAITING_PARTS":
       return "default";
     case "RESOLVED":
+    case "DELIVERED":
       return "success";
     case "CLOSED":
       return "neutral";
@@ -52,11 +55,43 @@ function statusBadgeVariant(
   }
 }
 
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  return WORK_ORDER_STATUS_LABELS[status as WorkOrderStatus] ?? status;
+}
+
 function toPdfData(
   wo: WorkOrder,
   history: WorkOrderStatusHistory[],
+  timeline: WorkOrderTimelineEvent[],
   attachments: WorkOrderAttachment[]
 ): SingleWorkOrderPdfData {
+  const timelineSource =
+    timeline.length > 0
+      ? [...timeline]
+          .sort((a, b) => {
+            const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return ta - tb;
+          })
+          .map((h) => {
+            const from = statusLabel(h.oldStatus);
+            const to = statusLabel(h.newStatus);
+            const when = formatDateTime(h.createdAt);
+            const who = h.changedByName || "Sistem";
+            return `${when}: ${from} → ${to} (${who})${
+              h.description ? ` — ${h.description}` : ""
+            }`;
+          })
+      : history.map((h) => {
+          const from = statusLabel(h.oldStatus);
+          const to = statusLabel(h.newStatus);
+          const when = formatDateTime(h.createdAt);
+          return `${when}: ${from} → ${to}${
+            h.description ? ` (${h.description})` : ""
+          }`;
+        });
+
   return {
     workOrderNo: wo.serviceNumber || `WO-${wo.id}`,
     companyTitle: "Servis Takip Sistemi",
@@ -78,17 +113,13 @@ function toPdfData(
     serviceType: wo.serviceType || undefined,
     createdAt: formatDateTime(wo.createdAt),
     assignedAt: formatDateTime(wo.assignedAt),
-    completedAt: formatDateTime(wo.completedAt),
+    completedAt: formatDateTime(wo.resolvedAt || wo.completedAt),
+    deliveredAt: formatDateTime(wo.deliveredAt),
     closedAt: formatDateTime(wo.closedAt),
-    historyLines: history.map((h) => {
-      const from = h.oldStatus
-        ? WORK_ORDER_STATUS_LABELS[h.oldStatus as WorkOrderStatus] ?? h.oldStatus
-        : "-";
-      const to =
-        WORK_ORDER_STATUS_LABELS[h.newStatus as WorkOrderStatus] ?? h.newStatus;
-      const when = formatDateTime(h.createdAt);
-      return `${when}: ${from} → ${to}${h.description ? ` (${h.description})` : ""}`;
-    }),
+    resolutionNote: wo.resolutionNote || undefined,
+    deliveryNote: wo.deliveryNote || undefined,
+    cancellationReason: wo.cancellationReason || undefined,
+    historyLines: timelineSource,
     attachmentNames: attachments.map((a) => a.fileName),
   };
 }
@@ -98,6 +129,7 @@ export function WorkOrderPdfModal({
   onClose,
   workOrder,
   history = [],
+  timeline = [],
   attachments = [],
 }: WorkOrderPdfModalProps) {
   const toast = useToast();
@@ -105,8 +137,8 @@ export function WorkOrderPdfModal({
 
   const pdfData = useMemo(() => {
     if (!workOrder) return null;
-    return toPdfData(workOrder, history, attachments);
-  }, [workOrder, history, attachments]);
+    return toPdfData(workOrder, history, timeline, attachments);
+  }, [workOrder, history, timeline, attachments]);
 
   useEffect(() => {
     if (!isOpen && previewUrl) {
@@ -137,7 +169,7 @@ export function WorkOrderPdfModal({
     try {
       downloadWorkOrderDetailPdf(
         pdfData,
-        `is-emri-detay_${workOrder.customer?.fullName?.replace(/\s+/g, "-") || "rapor"}.pdf`
+        `servis_${workOrder.serviceNumber || workOrder.id}.pdf`
       );
       toast.success("PDF indirildi");
     } catch {
@@ -146,6 +178,15 @@ export function WorkOrderPdfModal({
   };
 
   if (!workOrder) return null;
+
+  const timelineRows =
+    timeline.length > 0
+      ? [...timeline].sort((a, b) => {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return ta - tb;
+        })
+      : history;
 
   return (
     <Modal
@@ -157,7 +198,10 @@ export function WorkOrderPdfModal({
       <div className="space-y-5">
         <DetailList
           items={[
-            { label: "İş Emri No", value: `WO-${workOrder.id}` },
+            {
+              label: "Servis No",
+              value: workOrder.serviceNumber || "—",
+            },
             { label: "Müşteri", value: workOrder.customer?.fullName || "—" },
             {
               label: "Müşteri Telefon",
@@ -192,6 +236,18 @@ export function WorkOrderPdfModal({
               value: workOrder.description || "—",
             },
             {
+              label: "Çözüm notu",
+              value: workOrder.resolutionNote || "—",
+            },
+            {
+              label: "Teslim notu",
+              value: workOrder.deliveryNote || "—",
+            },
+            {
+              label: "İptal nedeni",
+              value: workOrder.cancellationReason || "—",
+            },
+            {
               label: "Oluşturma",
               value: formatDateTime(workOrder.createdAt),
             },
@@ -200,31 +256,35 @@ export function WorkOrderPdfModal({
               value: formatDateTime(workOrder.assignedAt),
             },
             {
-              label: "Tamamlanma",
-              value: formatDateTime(workOrder.completedAt),
+              label: "Çözüm tarihi",
+              value: formatDateTime(workOrder.resolvedAt || workOrder.completedAt),
+            },
+            {
+              label: "Teslim tarihi",
+              value: formatDateTime(workOrder.deliveredAt),
+            },
+            {
+              label: "Kapanış",
+              value: formatDateTime(workOrder.closedAt),
             },
           ]}
         />
 
         <div>
           <h4 className="mb-2 text-sm font-semibold text-slate-800">
-            Yapılan İşlemler
+            Zaman Çizelgesi
           </h4>
-          {history.length === 0 ? (
+          {timelineRows.length === 0 ? (
             <p className="text-xs text-slate-400">Durum geçmişi yok</p>
           ) : (
             <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-slate-600">
-              {history.map((h) => (
+              {timelineRows.map((h) => (
                 <li key={h.id} className="rounded-lg bg-slate-50 px-2 py-1.5">
-                  {formatDateTime(h.createdAt)}:{" "}
-                  {h.oldStatus
-                    ? WORK_ORDER_STATUS_LABELS[h.oldStatus as WorkOrderStatus] ??
-                      h.oldStatus
-                    : "—"}{" "}
-                  →{" "}
-                  {WORK_ORDER_STATUS_LABELS[h.newStatus as WorkOrderStatus] ??
-                    h.newStatus}
-                  {h.description ? ` — ${h.description}` : ""}
+                  {formatDateTime(h.createdAt)}: {statusLabel(h.oldStatus)} →{" "}
+                  {statusLabel(h.newStatus)}
+                  {"description" in h && h.description
+                    ? ` — ${h.description}`
+                    : ""}
                 </li>
               ))}
             </ul>

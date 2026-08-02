@@ -24,6 +24,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { DetailList } from "@/components/ui/DetailList";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { Input } from "@/components/ui/Input";
 import {
   Table,
   TableBody,
@@ -46,16 +47,19 @@ import {
   CreateWorkOrderRequest,
   KanbanBoard,
   ServiceType,
+  WHATSAPP_OUTBOX_STATUS_LABELS,
   WORK_ORDER_STATUS_LABELS,
   WORK_ORDER_PRIORITY_LABELS,
   SERVICE_TYPE_LABELS,
   WORK_ORDER_STATUSES,
   WORK_ORDER_TRANSITIONS,
+  WhatsAppOutboxItem,
   WorkOrder,
   WorkOrderAttachment,
   WorkOrderPriority,
   WorkOrderStatus,
   WorkOrderStatusHistory,
+  WorkOrderTimelineEvent,
 } from "@/types/workOrder";
 import { formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -65,6 +69,8 @@ import {
   isTechnicianOnly,
 } from "@/lib/auth";
 import { WorkOrderPdfModal } from "@/components/workorders/WorkOrderPdfModal";
+import { WorkOrderTimeline } from "@/components/workorders/WorkOrderTimeline";
+import { WorkOrderWhatsAppPanel } from "@/components/workorders/WorkOrderWhatsAppPanel";
 
 type ViewMode = "list" | "kanban";
 type ModalMode = "create" | "detail" | "status" | "assign" | "pdf" | "created" | null;
@@ -76,12 +82,13 @@ function statusBadgeVariant(
     case "OPEN":
       return "warning";
     case "ASSIGNED":
-      return "info";
     case "IN_PROGRESS":
+    case "READY_FOR_DELIVERY":
       return "info";
     case "WAITING_PARTS":
       return "default";
     case "RESOLVED":
+    case "DELIVERED":
       return "success";
     case "CLOSED":
       return "neutral";
@@ -92,8 +99,43 @@ function statusBadgeVariant(
   }
 }
 
+function notificationStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  return WHATSAPP_OUTBOX_STATUS_LABELS[status] ?? status;
+}
+
+function toLocalDateTimeInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalDateTimeInput(value: string): string | undefined {
+  if (!value.trim()) return undefined;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
 const PRIORITIES: WorkOrderPriority[] = ["LOW", "MEDIUM", "HIGH"];
 const SERVICE_TYPES: ServiceType[] = ["WARRANTY", "PAID"];
+const LIST_STATUS_FILTERS: WorkOrderStatus[] = [
+  "IN_PROGRESS",
+  "WAITING_PARTS",
+  "READY_FOR_DELIVERY",
+  "DELIVERED",
+  "CANCELLED",
+  ...WORK_ORDER_STATUSES.filter(
+    (s) =>
+      s !== "IN_PROGRESS" &&
+      s !== "WAITING_PARTS" &&
+      s !== "READY_FOR_DELIVERY" &&
+      s !== "DELIVERED" &&
+      s !== "CANCELLED"
+  ),
+];
 
 export default function IsEmirleriPage() {
   const toast = useToast();
@@ -126,6 +168,17 @@ export default function IsEmirleriPage() {
   const [assignTechnicianId, setAssignTechnicianId] = useState("");
   const [availableLoading, setAvailableLoading] = useState(false);
   const [history, setHistory] = useState<WorkOrderStatusHistory[]>([]);
+  const [timeline, setTimeline] = useState<WorkOrderTimelineEvent[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState("");
+  const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsAppOutboxItem[]>(
+    []
+  );
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const [whatsappError, setWhatsappError] = useState("");
+  const [retryingOutboxId, setRetryingOutboxId] = useState<
+    number | "all" | null
+  >(null);
   const [attachments, setAttachments] = useState<WorkOrderAttachment[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -133,6 +186,10 @@ export default function IsEmirleriPage() {
     null
   );
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
+  const [estimatedCompletionAt, setEstimatedCompletionAt] = useState("");
 
   const [customerId, setCustomerId] = useState("");
   const [deviceId, setDeviceId] = useState("");
@@ -298,7 +355,16 @@ export default function IsEmirleriPage() {
     setAvailableTechnicians([]);
     setAssignTechnicianId("");
     setHistory([]);
+    setTimeline([]);
+    setTimelineError("");
+    setWhatsappOutbox([]);
+    setWhatsappError("");
+    setRetryingOutboxId(null);
     setAttachments([]);
+    setCancellationReason("");
+    setResolutionNote("");
+    setDeliveryNote("");
+    setEstimatedCompletionAt("");
     setCustomerId("");
     setDeviceId("");
     setDescription("");
@@ -314,33 +380,59 @@ export default function IsEmirleriPage() {
     setModalMode("create");
   };
 
+  const loadWhatsAppOutbox = useCallback(async (id: number) => {
+    setWhatsappLoading(true);
+    setWhatsappError("");
+    try {
+      const rows = await workOrderService.getWhatsAppOutbox(id);
+      setWhatsappOutbox(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setWhatsappError(apiErr.message || "WhatsApp kuyruğu yüklenemedi");
+      setWhatsappOutbox([]);
+    } finally {
+      setWhatsappLoading(false);
+    }
+  }, []);
+
   const openDetail = async (id: number) => {
     setModalMode("detail");
     setDetailLoading(true);
     setExtrasLoading(true);
+    setTimelineLoading(true);
     setActionError("");
     setHistory([]);
+    setTimeline([]);
+    setTimelineError("");
+    setWhatsappOutbox([]);
+    setWhatsappError("");
     setAttachments([]);
     try {
       const data = await workOrderService.getById(id);
       setSelected(data);
       try {
-        const [hist, files] = await Promise.all([
-          workOrderService.getHistory(id),
-          workOrderService.getAttachments(id),
+        const [hist, files, tl] = await Promise.all([
+          workOrderService.getHistory(id).catch(() => [] as WorkOrderStatusHistory[]),
+          workOrderService.getAttachments(id).catch(() => [] as WorkOrderAttachment[]),
+          workOrderService.getTimeline(id),
         ]);
         setHistory(Array.isArray(hist) ? hist : []);
         setAttachments(Array.isArray(files) ? files : []);
-      } catch {
-        setHistory([]);
-        setAttachments([]);
+        setTimeline(Array.isArray(tl) ? tl : []);
+      } catch (err) {
+        const apiErr = err as ApiError;
+        setTimelineError(apiErr.message || "Zaman çizelgesi yüklenemedi");
+        setTimeline([]);
       } finally {
         setExtrasLoading(false);
+        setTimelineLoading(false);
       }
+      void loadWhatsAppOutbox(id);
     } catch (err) {
       const apiErr = err as ApiError;
       setActionError(apiErr.message || "Detay yüklenemedi");
       setExtrasLoading(false);
+      setTimelineLoading(false);
     } finally {
       setDetailLoading(false);
     }
@@ -371,6 +463,10 @@ export default function IsEmirleriPage() {
     setSelected(wo);
     const allowed = WORK_ORDER_TRANSITIONS[wo.status] ?? [];
     setNextStatus(allowed[0] ?? "");
+    setCancellationReason("");
+    setResolutionNote(wo.resolutionNote || "");
+    setDeliveryNote(wo.deliveryNote || "");
+    setEstimatedCompletionAt(toLocalDateTimeInput(wo.estimatedCompletionAt));
     setActionError("");
     setModalMode("status");
   };
@@ -442,10 +538,31 @@ export default function IsEmirleriPage() {
 
   const handleStatusUpdate = async () => {
     if (!selected || !nextStatus) return;
+
+    if (nextStatus === "CANCELLED" && !cancellationReason.trim()) {
+      setActionError("İptal nedeni zorunludur");
+      return;
+    }
+
     setActionLoading(true);
     setActionError("");
     try {
-      await workOrderService.updateStatus(selected.id, nextStatus);
+      await workOrderService.updateStatus(selected.id, nextStatus, {
+        cancellationReason:
+          nextStatus === "CANCELLED" ? cancellationReason.trim() : undefined,
+        resolutionNote:
+          nextStatus === "RESOLVED"
+            ? resolutionNote.trim() || undefined
+            : undefined,
+        deliveryNote:
+          nextStatus === "DELIVERED" || nextStatus === "READY_FOR_DELIVERY"
+            ? deliveryNote.trim() || undefined
+            : undefined,
+        estimatedCompletionAt:
+          nextStatus === "READY_FOR_DELIVERY"
+            ? fromLocalDateTimeInput(estimatedCompletionAt)
+            : undefined,
+      });
       toast.success("Durum güncellendi");
       closeModal();
       refresh();
@@ -454,6 +571,44 @@ export default function IsEmirleriPage() {
       setActionError(apiErr.message || "Durum güncellenemedi");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleRetryAllWhatsApp = async () => {
+    if (!selected) return;
+    setRetryingOutboxId("all");
+    setWhatsappError("");
+    try {
+      await workOrderService.retryFailedWhatsApp(selected.id);
+      toast.success("Başarısız bildirimler yeniden kuyruğa alındı");
+      const refreshed = await workOrderService.getById(selected.id);
+      setSelected(refreshed);
+      await loadWhatsAppOutbox(selected.id);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setWhatsappError(apiErr.message || "Yeniden gönderilemedi");
+      toast.error(apiErr.message || "Yeniden gönderilemedi");
+    } finally {
+      setRetryingOutboxId(null);
+    }
+  };
+
+  const handleRetryOneWhatsApp = async (outboxId: number) => {
+    if (!selected) return;
+    setRetryingOutboxId(outboxId);
+    setWhatsappError("");
+    try {
+      await workOrderService.retryWhatsAppOutbox(selected.id, outboxId);
+      toast.success("Kayıt yeniden kuyruğa alındı");
+      const refreshed = await workOrderService.getById(selected.id);
+      setSelected(refreshed);
+      await loadWhatsAppOutbox(selected.id);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setWhatsappError(apiErr.message || "Yeniden gönderilemedi");
+      toast.error(apiErr.message || "Yeniden gönderilemedi");
+    } finally {
+      setRetryingOutboxId(null);
     }
   };
 
@@ -540,7 +695,7 @@ export default function IsEmirleriPage() {
                 }
               >
                 <option value="">Tüm durumlar</option>
-                {WORK_ORDER_STATUSES.map((s) => (
+                {LIST_STATUS_FILTERS.map((s) => (
                   <option key={s} value={s}>
                     {WORK_ORDER_STATUS_LABELS[s]}
                   </option>
@@ -567,8 +722,8 @@ export default function IsEmirleriPage() {
                       <TableHead>Cihaz</TableHead>
                       <TableHead>Teknisyen</TableHead>
                       <TableHead>Durum</TableHead>
-                      <TableHead>Öncelik</TableHead>
-                      <TableHead>Oluşturma</TableHead>
+                      <TableHead>Tahmini tamamlanma</TableHead>
+                      <TableHead>Son bildirim</TableHead>
                       <TableHead>İşlem</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -607,11 +762,11 @@ export default function IsEmirleriPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {wo.priority
-                            ? WORK_ORDER_PRIORITY_LABELS[wo.priority] ?? wo.priority
-                            : "—"}
+                          {formatDateTime(wo.estimatedCompletionAt)}
                         </TableCell>
-                        <TableCell>{formatDateTime(wo.createdAt)}</TableCell>
+                        <TableCell>
+                          {notificationStatusLabel(wo.lastNotificationStatus)}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -678,7 +833,11 @@ export default function IsEmirleriPage() {
                         </p>
                         <p className="mt-1 text-xs text-slate-400">
                           {wo.technician?.user?.fullName || "Teknisyen atanmadı"} ·{" "}
-                          {formatDateTime(wo.createdAt)}
+                          {formatDateTime(wo.estimatedCompletionAt)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          Bildirim:{" "}
+                          {notificationStatusLabel(wo.lastNotificationStatus)}
                         </p>
                       </div>
                       <Badge variant={statusBadgeVariant(wo.status)}>
@@ -776,6 +935,9 @@ export default function IsEmirleriPage() {
                               "transition hover:border-primary-200 hover:shadow-card"
                             )}
                           >
+                            <p className="font-mono text-xs font-semibold text-sky-700">
+                              {wo.serviceNumber || "—"}
+                            </p>
                             <p className="text-sm font-semibold text-slate-900">
                               {wo.customer?.fullName || "Müşteri yok"}
                             </p>
@@ -969,16 +1131,48 @@ export default function IsEmirleriPage() {
                   value: selected.description || "—",
                 },
                 {
+                  label: "Tahmini tamamlanma",
+                  value: formatDateTime(selected.estimatedCompletionAt),
+                },
+                {
+                  label: "Çözüm tarihi",
+                  value: formatDateTime(selected.resolvedAt || selected.completedAt),
+                },
+                {
+                  label: "Teslim tarihi",
+                  value: formatDateTime(selected.deliveredAt),
+                },
+                {
+                  label: "Çözüm notu",
+                  value: selected.resolutionNote || "—",
+                },
+                {
+                  label: "Teslim notu",
+                  value: selected.deliveryNote || "—",
+                },
+                {
+                  label: "İptal nedeni",
+                  value: selected.cancellationReason || "—",
+                },
+                {
+                  label: "Son müşteri bildirimi",
+                  value: formatDateTime(selected.customerNotifiedAt),
+                },
+                {
+                  label: "Bildirim sayısı",
+                  value: String(selected.customerNotificationCount ?? 0),
+                },
+                {
+                  label: "Son WhatsApp durumu",
+                  value: notificationStatusLabel(selected.lastNotificationStatus),
+                },
+                {
                   label: "Oluşturma",
                   value: formatDateTime(selected.createdAt),
                 },
                 {
                   label: "Atama",
                   value: formatDateTime(selected.assignedAt),
-                },
-                {
-                  label: "Tamamlanma",
-                  value: formatDateTime(selected.completedAt),
                 },
                 {
                   label: "Kapanış",
@@ -1009,12 +1203,7 @@ export default function IsEmirleriPage() {
                 {(WORK_ORDER_TRANSITIONS[selected.status]?.length ?? 0) > 0 && (
                   <Button
                     type="button"
-                    onClick={() => {
-                      const allowed =
-                        WORK_ORDER_TRANSITIONS[selected.status] ?? [];
-                      setNextStatus(allowed[0] ?? "");
-                      setModalMode("status");
-                    }}
+                    onClick={() => openStatus(selected)}
                   >
                     Durum Değiştir
                   </Button>
@@ -1085,41 +1274,28 @@ export default function IsEmirleriPage() {
 
             <div className="space-y-3 border-t border-slate-100 pt-4">
               <h4 className="text-sm font-semibold text-slate-800">
-                Durum Geçmişi
+                Zaman Çizelgesi
               </h4>
-              {extrasLoading ? (
-                <p className="text-xs text-slate-500">Geçmiş yükleniyor…</p>
-              ) : history.length === 0 ? (
-                <p className="text-xs text-slate-400">Geçmiş kaydı yok</p>
-              ) : (
-                <ul className="max-h-48 space-y-2 overflow-y-auto">
-                  {history.map((h) => (
-                    <li
-                      key={h.id}
-                      className="rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm shadow-soft"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          variant={statusBadgeVariant(
-                            (h.newStatus as WorkOrderStatus) || "OPEN"
-                          )}
-                        >
-                          {WORK_ORDER_STATUS_LABELS[
-                            h.newStatus as WorkOrderStatus
-                          ] ?? h.newStatus}
-                        </Badge>
-                        <span className="text-xs text-slate-400">
-                          {formatDateTime(h.createdAt)}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-600">
-                        {h.description ||
-                          `${h.oldStatus ?? "—"} → ${h.newStatus}`}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <WorkOrderTimeline
+                events={timeline}
+                loading={timelineLoading}
+                error={timelineError}
+              />
+            </div>
+
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              <h4 className="text-sm font-semibold text-slate-800">
+                WhatsApp Bildirimleri
+              </h4>
+              <WorkOrderWhatsAppPanel
+                workOrder={selected}
+                outbox={whatsappOutbox}
+                loading={whatsappLoading}
+                error={whatsappError}
+                retryingId={retryingOutboxId}
+                onRetryAll={() => void handleRetryAllWhatsApp()}
+                onRetryOne={(id) => void handleRetryOneWhatsApp(id)}
+              />
             </div>
           </div>
         ) : null}
@@ -1156,6 +1332,49 @@ export default function IsEmirleriPage() {
                 </option>
               ))}
             </Select>
+
+            {nextStatus === "CANCELLED" && (
+              <Textarea
+                label="İptal nedeni"
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                required
+                hint="İptal için zorunlu"
+              />
+            )}
+
+            {nextStatus === "RESOLVED" && (
+              <Textarea
+                label="Çözüm notu"
+                value={resolutionNote}
+                onChange={(e) => setResolutionNote(e.target.value)}
+              />
+            )}
+
+            {nextStatus === "READY_FOR_DELIVERY" && (
+              <>
+                <Input
+                  label="Tahmini tamamlanma / teslim"
+                  type="datetime-local"
+                  value={estimatedCompletionAt}
+                  onChange={(e) => setEstimatedCompletionAt(e.target.value)}
+                />
+                <Textarea
+                  label="Teslim notu"
+                  value={deliveryNote}
+                  onChange={(e) => setDeliveryNote(e.target.value)}
+                />
+              </>
+            )}
+
+            {nextStatus === "DELIVERED" && (
+              <Textarea
+                label="Teslim notu"
+                value={deliveryNote}
+                onChange={(e) => setDeliveryNote(e.target.value)}
+              />
+            )}
+
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeModal}>
                 İptal
@@ -1315,6 +1534,7 @@ export default function IsEmirleriPage() {
         onClose={() => setModalMode("detail")}
         workOrder={selected}
         history={history}
+        timeline={timeline}
         attachments={attachments}
       />
     </div>

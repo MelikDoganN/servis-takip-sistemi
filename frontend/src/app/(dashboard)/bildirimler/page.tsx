@@ -27,6 +27,8 @@ import {
   notificationChannelLabel,
   notificationHref,
   notificationStatusLabel,
+  notificationDisplayMessage,
+  notificationDisplayTitle,
   notificationTypeLabel,
 } from "@/lib/notificationLabels";
 import { isAdmin } from "@/lib/auth";
@@ -220,7 +222,9 @@ export default function BildirimlerPage() {
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-navy">{n.title}</p>
+                    <p className="text-sm font-semibold text-navy">
+                      {notificationDisplayTitle(n)}
+                    </p>
                     {!n.read && (
                       <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />
                     )}
@@ -228,7 +232,9 @@ export default function BildirimlerPage() {
                   <p className="mt-1 text-xs text-slate-500">
                     {notificationTypeLabel(n.type)}
                   </p>
-                  <p className="mt-2 text-sm text-slate-600">{n.message}</p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {notificationDisplayMessage(n)}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <Badge variant="neutral">
                       {notificationChannelLabel(n.channel)}
@@ -285,14 +291,16 @@ export default function BildirimlerPage() {
                           {!n.read && (
                             <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
                           )}
-                          <span className="font-medium text-navy">{n.title}</span>
+                          <span className="font-medium text-navy">
+                            {notificationDisplayTitle(n)}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="text-slate-600">
                         {notificationTypeLabel(n.type)}
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-slate-600">
-                        {n.message}
+                        {notificationDisplayMessage(n)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="neutral">

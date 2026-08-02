@@ -14,6 +14,10 @@ import {
   XCircle,
   Plus,
   BarChart3,
+  Package,
+  Truck,
+  Timer,
+  Hourglass,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -52,6 +56,11 @@ const quickLinks = [
   },
 ];
 
+function formatHours(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${value.toFixed(1)} sa`;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,6 +98,9 @@ export default function DashboardPage() {
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <SkeletonCard />
@@ -110,6 +122,69 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
         <KpiCard
+          label="Bugün Açılan"
+          value={stats?.openedToday ?? 0}
+          description="Bugün oluşturulan iş emirleri"
+          iconBg="bg-sky-50 text-sky-600"
+          icon={<Plus className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Bugün Tamamlanan"
+          value={stats?.completedToday ?? 0}
+          description="Bugün çözülen / tamamlanan"
+          iconBg="bg-teal-50 text-teal-600"
+          icon={<CheckCircle2 className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Teslime Hazır"
+          value={stats?.readyForDelivery ?? 0}
+          description="Teslim bekleyen kayıtlar"
+          iconBg="bg-cyan-50 text-cyan-600"
+          icon={<Package className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Parça Bekliyor"
+          value={stats?.waitingParts ?? 0}
+          description="Parça bekleyen işler"
+          iconBg="bg-amber-50 text-amber-600"
+          icon={<Hourglass className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="İşlemde"
+          value={stats?.inProgress ?? 0}
+          description="Aktif işlemdeki kayıtlar"
+          iconBg="bg-indigo-50 text-indigo-600"
+          icon={<Timer className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Ort. Çözüm Süresi"
+          value={formatHours(stats?.averageResolutionHours)}
+          description="Saat cinsinden ortalama"
+          iconBg="bg-violet-50 text-violet-600"
+          icon={<Truck className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Açık İş Emri"
+          value={stats?.openWorkOrders ?? 0}
+          description="Bekleyen / devam eden"
+          iconBg="bg-amber-50 text-amber-600"
+          icon={<CircleDot className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Çözülen"
+          value={stats?.resolvedWorkOrders ?? 0}
+          description="İşlem tamamlananlar"
+          iconBg="bg-emerald-50 text-emerald-600"
+          icon={<CheckCircle2 className="h-5 w-5" />}
+        />
+        <KpiCard
+          label="Kapatılan"
+          value={stats?.closedWorkOrders ?? 0}
+          description="Operasyonel kapanış"
+          iconBg="bg-slate-100 text-slate-600"
+          icon={<XCircle className="h-5 w-5" />}
+        />
+        <KpiCard
           label="Toplam Müşteri"
           value={stats?.totalCustomers ?? 0}
           description="Kayıtlı müşteri sayısı"
@@ -129,27 +204,6 @@ export default function DashboardPage() {
           description="Tüm zamanlar"
           iconBg="bg-sky-50 text-sky-600"
           icon={<ClipboardList className="h-5 w-5" />}
-        />
-        <KpiCard
-          label="Açık İş Emri"
-          value={stats?.openWorkOrders ?? 0}
-          description="Bekleyen / devam eden"
-          iconBg="bg-amber-50 text-amber-600"
-          icon={<CircleDot className="h-5 w-5" />}
-        />
-        <KpiCard
-          label="Çözülen"
-          value={stats?.resolvedWorkOrders ?? 0}
-          description="Tamamlanan işler"
-          iconBg="bg-teal-50 text-teal-600"
-          icon={<CheckCircle2 className="h-5 w-5" />}
-        />
-        <KpiCard
-          label="Kapatılan"
-          value={stats?.closedWorkOrders ?? 0}
-          description="Kapatılmış kayıtlar"
-          iconBg="bg-slate-100 text-slate-600"
-          icon={<XCircle className="h-5 w-5" />}
         />
       </div>
 

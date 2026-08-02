@@ -10,6 +10,8 @@ export type WorkOrderStatus =
   | "IN_PROGRESS"
   | "WAITING_PARTS"
   | "RESOLVED"
+  | "READY_FOR_DELIVERY"
+  | "DELIVERED"
   | "CLOSED"
   | "CANCELLED";
 
@@ -23,6 +25,8 @@ export const WORK_ORDER_STATUSES: WorkOrderStatus[] = [
   "IN_PROGRESS",
   "WAITING_PARTS",
   "RESOLVED",
+  "READY_FOR_DELIVERY",
+  "DELIVERED",
   "CLOSED",
   "CANCELLED",
 ];
@@ -32,7 +36,9 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   ASSIGNED: "Teknisyen Atandı",
   IN_PROGRESS: "İşlemde",
   WAITING_PARTS: "Parça Bekliyor",
-  RESOLVED: "Çözüldü",
+  RESOLVED: "İşlem Tamamlandı",
+  READY_FOR_DELIVERY: "Teslime Hazır",
+  DELIVERED: "Teslim Edildi",
   CLOSED: "Kapatıldı",
   CANCELLED: "İptal Edildi",
 };
@@ -50,14 +56,24 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
 
 /** Backend state machine geçişleri ile birebir */
 export const WORK_ORDER_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
-  OPEN: ["ASSIGNED", "CANCELLED", "CLOSED"],
+  OPEN: ["ASSIGNED", "CANCELLED"],
   ASSIGNED: ["IN_PROGRESS", "WAITING_PARTS", "CANCELLED"],
   IN_PROGRESS: ["WAITING_PARTS", "RESOLVED", "CANCELLED"],
   WAITING_PARTS: ["IN_PROGRESS", "RESOLVED", "CANCELLED"],
-  RESOLVED: ["CLOSED"],
+  RESOLVED: ["READY_FOR_DELIVERY", "CANCELLED"],
+  READY_FOR_DELIVERY: ["DELIVERED", "CANCELLED"],
+  DELIVERED: ["CLOSED"],
   CLOSED: [],
   CANCELLED: [],
 };
+
+export type NotificationDeliveryStatus =
+  | "PENDING"
+  | "SENT"
+  | "FAILED"
+  | "SKIPPED"
+  | "PROCESSING"
+  | string;
 
 export interface WorkOrder {
   id: number;
@@ -74,7 +90,17 @@ export interface WorkOrder {
   assignedAt: string | null;
   waitingForPartsSince: string | null;
   completedAt: string | null;
+  resolvedAt: string | null;
+  deliveredAt: string | null;
   closedAt: string | null;
+  estimatedCompletionAt: string | null;
+  customerNotifiedAt: string | null;
+  deliveryNote: string | null;
+  resolutionNote: string | null;
+  cancellationReason: string | null;
+  lastNotificationStatus: NotificationDeliveryStatus | null;
+  lastWhatsappMessageId: string | null;
+  customerNotificationCount: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,6 +112,17 @@ export interface CreateWorkOrderRequest {
   priority?: WorkOrderPriority;
   serviceType?: ServiceType;
   regionId?: number;
+}
+
+export interface WorkOrderLifecycleUpdate {
+  cancellationReason?: string | null;
+  resolutionNote?: string | null;
+  deliveryNote?: string | null;
+  estimatedCompletionAt?: string | null;
+}
+
+export interface UpdateWorkOrderStatusOptions extends WorkOrderLifecycleUpdate {
+  channel?: string;
 }
 
 export type KanbanBoard = Partial<Record<WorkOrderStatus, WorkOrder[]>> &
@@ -101,6 +138,18 @@ export interface WorkOrderStatusHistory {
   createdAt: string;
 }
 
+/** GET /api/workorders/{id}/timeline */
+export interface WorkOrderTimelineEvent {
+  id: number;
+  oldStatus: string | null;
+  newStatus: string;
+  description: string | null;
+  channel: string | null;
+  changedByUserId: number | null;
+  changedByName: string | null;
+  createdAt: string;
+}
+
 export interface WorkOrderAttachment {
   id: number;
   fileName: string;
@@ -110,3 +159,27 @@ export interface WorkOrderAttachment {
   uploadedBy: User | null;
   createdAt: string;
 }
+
+/** GET /api/workorders/{id}/whatsapp-outbox */
+export interface WhatsAppOutboxItem {
+  id: number;
+  workOrderId: number | null;
+  eventType: string;
+  eventKey: string;
+  recipientPhone: string;
+  payload: string;
+  attemptCount: number;
+  nextAttemptAt: string | null;
+  lastError: string | null;
+  status: string;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export const WHATSAPP_OUTBOX_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Bekliyor",
+  PROCESSING: "İşleniyor",
+  SENT: "Gönderildi",
+  FAILED: "Başarısız",
+  SKIPPED: "Atlandı",
+};

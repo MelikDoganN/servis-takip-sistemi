@@ -60,6 +60,8 @@ const STATUS_BAR_COLORS: Record<WorkOrderStatus, string> = {
   IN_PROGRESS: "bg-indigo-500",
   WAITING_PARTS: "bg-orange-500",
   RESOLVED: "bg-teal-500",
+  READY_FOR_DELIVERY: "bg-cyan-500",
+  DELIVERED: "bg-emerald-500",
   CLOSED: "bg-slate-400",
   CANCELLED: "bg-rose-400",
 };
@@ -77,6 +79,10 @@ function statusBadgeVariant(
     case "WAITING_PARTS":
       return "default";
     case "RESOLVED":
+      return "success";
+    case "READY_FOR_DELIVERY":
+      return "info";
+    case "DELIVERED":
       return "success";
     case "CLOSED":
       return "neutral";

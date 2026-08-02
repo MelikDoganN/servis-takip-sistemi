@@ -235,6 +235,10 @@ export interface SingleWorkOrderPdfData {
   assignedAt?: string;
   completedAt?: string;
   closedAt?: string;
+  deliveredAt?: string;
+  resolutionNote?: string;
+  deliveryNote?: string;
+  cancellationReason?: string;
   historyLines?: string[];
   attachmentNames?: string[];
 }
@@ -275,9 +279,13 @@ function buildSingleWorkOrderDoc(data: SingleWorkOrderPdfData): jsPDF {
       [t("Oncelik"), t(data.priority)],
       [t("Servis Tipi"), t(data.serviceType)],
       [t("Aciklama / Notlar"), t(data.description)],
+      [t("Cozum Notu"), t(data.resolutionNote)],
+      [t("Teslim Notu"), t(data.deliveryNote)],
+      [t("Iptal Nedeni"), t(data.cancellationReason)],
       [t("Olusturma"), t(data.createdAt)],
       [t("Atama"), t(data.assignedAt)],
       [t("Tamamlanma"), t(data.completedAt)],
+      [t("Teslim Tarihi"), t(data.deliveredAt)],
       [t("Kapanis"), t(data.closedAt)],
     ],
     theme: "grid",
@@ -288,6 +296,29 @@ function buildSingleWorkOrderDoc(data: SingleWorkOrderPdfData): jsPDF {
   });
 
   let y = getFinalY(doc, 120) + 10;
+  if (y > doc.internal.pageSize.getHeight() - 40) {
+    doc.addPage();
+    y = 20;
+  }
+  y = addSectionTitle(doc, "Zaman Cizelgesi", y);
+  autoTable(doc, {
+    startY: y,
+    head: [[t("Timeline")]],
+    body:
+      data.historyLines && data.historyLines.length > 0
+        ? data.historyLines.map((line) => [t(line)])
+        : [[t("Kayit bulunamadi")]],
+    theme: "striped",
+    headStyles: { fillColor: [18, 167, 205], textColor: 255 },
+    styles: { fontSize: 8 },
+    margin: { left: 14, right: 14 },
+  });
+
+  y = getFinalY(doc, y + 30) + 10;
+  if (y > doc.internal.pageSize.getHeight() - 40) {
+    doc.addPage();
+    y = 20;
+  }
   y = addSectionTitle(doc, "Aciklama", y);
   autoTable(doc, {
     startY: y,

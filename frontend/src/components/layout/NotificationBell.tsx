@@ -20,6 +20,8 @@ import { notificationService } from "@/services/notificationService";
 import { NotificationDto } from "@/types/notification";
 import {
   notificationChannelLabel,
+  notificationDisplayMessage,
+  notificationDisplayTitle,
   notificationHref,
   notificationTypeLabel,
 } from "@/lib/notificationLabels";
@@ -259,7 +261,7 @@ export function NotificationBell() {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="truncate text-sm font-medium text-slate-800">
-                            {n.title}
+                            {notificationDisplayTitle(n)}
                           </span>
                           {!n.read && (
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
@@ -269,7 +271,7 @@ export function NotificationBell() {
                           {notificationTypeLabel(n.type)}
                         </span>
                         <span className="mt-0.5 block truncate text-xs text-slate-500">
-                          {n.message}
+                          {notificationDisplayMessage(n)}
                         </span>
                         <span className="mt-1 flex flex-wrap items-center gap-1.5">
                           <span className="text-[10px] text-slate-400">

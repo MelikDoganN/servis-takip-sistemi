@@ -5,11 +5,18 @@ import {
   NotificationType,
   RelatedEntityType,
 } from "@/types/notification";
+import { WORK_ORDER_STATUS_LABELS, WorkOrderStatus } from "@/types/workOrder";
 
 export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   WORK_ORDER_CREATED: "İş Emri Oluşturuldu",
   TECHNICIAN_ASSIGNED: "Teknisyen Atandı",
   STATUS_CHANGED: "Durum Güncellendi",
+  READY_FOR_DELIVERY: "Teslime Hazır",
+  DELIVERED: "Teslim Edildi",
+  CANCELLED: "İptal Edildi",
+  WORK_ORDER_READY_FOR_DELIVERY: "Teslime Hazır",
+  WORK_ORDER_DELIVERED: "Teslim Edildi",
+  WORK_ORDER_CANCELLED: "İptal Edildi",
   WARRANTY_WARNING: "Garanti Uyarısı",
   SYSTEM: "Sistem",
 };
@@ -26,6 +33,18 @@ export const NOTIFICATION_CHANNEL_LABELS: Record<string, string> = {
   WHATSAPP: "WhatsApp",
 };
 
+const STATUS_TOKEN_LABELS: Record<string, string> = {
+  READY_FOR_DELIVERY: WORK_ORDER_STATUS_LABELS.READY_FOR_DELIVERY,
+  DELIVERED: WORK_ORDER_STATUS_LABELS.DELIVERED,
+  CANCELLED: WORK_ORDER_STATUS_LABELS.CANCELLED,
+  OPEN: WORK_ORDER_STATUS_LABELS.OPEN,
+  ASSIGNED: WORK_ORDER_STATUS_LABELS.ASSIGNED,
+  IN_PROGRESS: WORK_ORDER_STATUS_LABELS.IN_PROGRESS,
+  WAITING_PARTS: WORK_ORDER_STATUS_LABELS.WAITING_PARTS,
+  RESOLVED: WORK_ORDER_STATUS_LABELS.RESOLVED,
+  CLOSED: WORK_ORDER_STATUS_LABELS.CLOSED,
+};
+
 export function notificationTypeLabel(type: NotificationType): string {
   return NOTIFICATION_TYPE_LABELS[type] ?? type;
 }
@@ -36,6 +55,33 @@ export function notificationStatusLabel(status: NotificationStatus): string {
 
 export function notificationChannelLabel(channel: NotificationChannel): string {
   return NOTIFICATION_CHANNEL_LABELS[channel] ?? channel;
+}
+
+/** Bildirim başlık/mesajındaki teknik durum kodlarını Türkçeleştirir. */
+export function localizeNotificationText(
+  text: string | null | undefined
+): string {
+  if (!text) return "";
+  let out = text;
+  for (const [token, label] of Object.entries(STATUS_TOKEN_LABELS)) {
+    out = out.replace(new RegExp(`\\b${token}\\b`, "g"), label);
+  }
+  return out;
+}
+
+export function notificationDisplayTitle(n: NotificationDto): string {
+  const localized = localizeNotificationText(n.title);
+  if (localized) return localized;
+  return notificationTypeLabel(n.type);
+}
+
+export function notificationDisplayMessage(n: NotificationDto): string {
+  return localizeNotificationText(n.message);
+}
+
+export function workOrderStatusLabelSafe(status: string | null | undefined): string {
+  if (!status) return "—";
+  return WORK_ORDER_STATUS_LABELS[status as WorkOrderStatus] ?? status;
 }
 
 /** Teknik ID göstermeden ilgili liste sayfasına yönlendir. */

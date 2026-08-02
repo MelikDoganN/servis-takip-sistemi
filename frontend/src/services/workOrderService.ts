@@ -3,10 +3,14 @@ import { PageResponse } from "@/types/api";
 import {
   CreateWorkOrderRequest,
   KanbanBoard,
+  UpdateWorkOrderStatusOptions,
+  WhatsAppOutboxItem,
   WorkOrder,
   WorkOrderAttachment,
+  WorkOrderLifecycleUpdate,
   WorkOrderStatus,
   WorkOrderStatusHistory,
+  WorkOrderTimelineEvent,
 } from "@/types/workOrder";
 
 function unwrapContent<T>(data: PageResponse<T> | T[]): T[] {
@@ -64,14 +68,36 @@ export const workOrderService = {
   updateStatus(
     id: number,
     status: WorkOrderStatus,
-    channel = "WEB"
+    options: UpdateWorkOrderStatusOptions = {}
   ): Promise<WorkOrder> {
     const params = new URLSearchParams({
       status,
-      channel,
+      channel: options.channel || "WEB",
     });
+    if (options.cancellationReason) {
+      params.set("cancellationReason", options.cancellationReason);
+    }
+    if (options.resolutionNote) {
+      params.set("resolutionNote", options.resolutionNote);
+    }
+    if (options.deliveryNote) {
+      params.set("deliveryNote", options.deliveryNote);
+    }
+    if (options.estimatedCompletionAt) {
+      params.set("estimatedCompletionAt", options.estimatedCompletionAt);
+    }
     return apiClient<WorkOrder>(`/api/workorders/${id}/status?${params}`, {
       method: "PUT",
+    });
+  },
+
+  updateLifecycle(
+    id: number,
+    data: WorkOrderLifecycleUpdate
+  ): Promise<WorkOrder> {
+    return apiClient<WorkOrder>(`/api/workorders/${id}/lifecycle`, {
+      method: "PUT",
+      body: data,
     });
   },
 
@@ -89,6 +115,38 @@ export const workOrderService = {
   getHistory(id: number): Promise<WorkOrderStatusHistory[]> {
     return apiClient<WorkOrderStatusHistory[]>(
       `/api/workorders/${id}/history`
+    );
+  },
+
+  getTimeline(id: number): Promise<WorkOrderTimelineEvent[]> {
+    return apiClient<WorkOrderTimelineEvent[]>(
+      `/api/workorders/${id}/timeline`
+    );
+  },
+
+  getWhatsAppOutbox(id: number): Promise<WhatsAppOutboxItem[]> {
+    return apiClient<WhatsAppOutboxItem[]>(
+      `/api/workorders/${id}/whatsapp-outbox`
+    );
+  },
+
+  retryFailedWhatsApp(id: number): Promise<{
+    workOrderId: number;
+    requeuedCount: number;
+    items: WhatsAppOutboxItem[];
+  }> {
+    return apiClient(`/api/workorders/${id}/whatsapp/retry`, {
+      method: "POST",
+    });
+  },
+
+  retryWhatsAppOutbox(
+    id: number,
+    outboxId: number
+  ): Promise<WhatsAppOutboxItem> {
+    return apiClient(
+      `/api/workorders/${id}/whatsapp-outbox/${outboxId}/retry`,
+      { method: "POST" }
     );
   },
 
