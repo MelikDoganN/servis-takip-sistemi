@@ -45,6 +45,9 @@ class WorkOrderServiceTest {
     @Mock
     private WhatsAppNotificationClient whatsAppNotificationClient;
 
+    @Mock
+    private NotificationService notificationService;
+
     @InjectMocks
     private WorkOrderService workOrderService;
 
@@ -152,10 +155,10 @@ class WorkOrderServiceTest {
         workOrder.setStatus("CLOSED");
         when(workOrderRepository.findById(1L)).thenReturn(Optional.of(workOrder));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> {
             workOrderService.updateStatus(1L, "OPEN", null, "WEB");
         });
-        assertEquals("Kapatılmış iş emri değiştirilemez", exception.getMessage());
+        assertEquals("Kapatılmış iş emri değiştirilemez", exception.getReason());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.servis.backend.service;
 
+import com.servis.backend.dto.BotInteractionLogDto;
 import com.servis.backend.dto.BotInteractionRequest;
 import com.servis.backend.entity.BotInteractionLog;
 import com.servis.backend.repository.BotInteractionLogRepository;
@@ -8,8 +9,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class BotInteractionLogService {
@@ -19,10 +24,6 @@ public class BotInteractionLogService {
     @Autowired
     private BotInteractionLogRepository botInteractionLogRepository;
 
-    /**
-     * Meta message id ile inbound claim. Duplicate ise false.
-     * Ana akışı bozmamak için exception dışarı sızdırılmaz (claim false).
-     */
     @Transactional
     public boolean claimInboundMessage(String externalMessageId, String phone, String messageType, String command) {
         if (externalMessageId == null || externalMessageId.isBlank()) {
@@ -79,6 +80,47 @@ public class BotInteractionLogService {
         } catch (Exception e) {
             log.warn("Bot interaction log yazılamadı: {}", e.getClass().getSimpleName());
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<BotInteractionLogDto> list(String direction, String status, String eventType, Pageable pageable) {
+        return botInteractionLogRepository
+                .search(blankToNull(direction), blankToNull(status), blankToNull(eventType), pageable)
+                .map(this::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public BotInteractionLogDto getById(Long id) {
+        BotInteractionLog entry = botInteractionLogRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Kayıt bulunamadı"));
+        return toDto(entry);
+    }
+
+    private BotInteractionLogDto toDto(BotInteractionLog entry) {
+        BotInteractionLogDto dto = new BotInteractionLogDto();
+        dto.setId(entry.getId());
+        dto.setDirection(entry.getDirection());
+        dto.setPhoneMasked(maskPhone(entry.getPhoneNumber()));
+        dto.setMessageType(entry.getMessageType());
+        dto.setCommand(entry.getCommand());
+        dto.setEventType(entry.getEventType());
+        dto.setStatus(entry.getStatus());
+        dto.setWorkOrderId(entry.getWorkOrderId());
+        dto.setMessageSummary(entry.getMessageSummary());
+        dto.setErrorMessage(entry.getErrorMessage());
+        dto.setCreatedAt(entry.getCreatedAt());
+        return dto;
+    }
+
+    static String maskPhone(String phone) {
+        if (phone == null) {
+            return "***";
+        }
+        String digits = phone.replaceAll("\\D", "");
+        if (digits.length() <= 6) {
+            return "***";
+        }
+        return digits.substring(0, 3) + "******" + digits.substring(digits.length() - 3);
     }
 
     private static String resolvePhoneForStorage(String phone) {

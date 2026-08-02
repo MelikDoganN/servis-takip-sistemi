@@ -3,6 +3,7 @@ package com.servis.backend.service;
 import com.servis.backend.dto.BotInteractionRequest;
 import com.servis.backend.dto.WhatsAppNotificationRequest;
 import com.servis.backend.entity.NotificationDedup;
+import com.servis.backend.entity.WhatsAppOutbox;
 import com.servis.backend.repository.NotificationDedupRepository;
 import com.servis.backend.security.BotApiKeyGuard;
 import com.servis.backend.util.PhoneNormalizer;
@@ -14,6 +15,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -23,6 +25,7 @@ import java.util.Map;
 /**
  * Backend → WhatsApp bot /send-notification istemcisi.
  * URL veya API key yoksa çağrıyı atlar; iş emri işlemlerini bozmaz.
+ * Başarısız gönderimler outbox'a alınır ve worker ile retry edilir.
  */
 @Service
 public class WhatsAppNotificationClient {
@@ -38,15 +41,15 @@ public class WhatsAppNotificationClient {
     @Autowired
     private BotInteractionLogService botInteractionLogService;
 
+    @Autowired
+    private WhatsAppOutboxService whatsAppOutboxService;
+
     @Value("${whatsapp.bot.url:}")
     private String botBaseUrl;
 
     @Value("${whatsapp.bot.api-key:}")
     private String botApiKey;
 
-    /**
-     * Geriye uyumlu basit gönderim (dedup yok).
-     */
     public void sendNotification(String phone, String message) {
         WhatsAppNotificationRequest request = new WhatsAppNotificationRequest();
         request.setPhone(phone);
@@ -89,6 +92,75 @@ public class WhatsAppNotificationClient {
             }
         }
 
+        SendResult result = doHttpSend(phone, request);
+        if (result.success) {
+            logOutbound(request, phone, "SENT", null);
+            return;
+        }
+
+        logOutbound(request, phone, "FAILED", result.error);
+        if (request.getWorkOrderId() != null && request.getEventType() != null) {
+            boolean queued = whatsAppOutboxService.enqueueIfAbsent(request, phone, result.error);
+            if (queued) {
+                log.info("WhatsApp bildirimi outbox'a alındı: wo={} event={}",
+                        request.getWorkOrderId(), request.getEventType());
+            }
+        }
+    }
+
+    /**
+     * Outbox worker retry — dedup tekrar kontrol edilmez.
+     */
+    public boolean retrySend(WhatsAppOutbox outbox) {
+        WhatsAppNotificationRequest request = whatsAppOutboxService.fromOutbox(outbox);
+        String phone = outbox.getRecipientPhone();
+        if (botBaseUrl == null || botBaseUrl.isBlank() || botApiKey == null || botApiKey.isBlank()) {
+            return false;
+        }
+        SendResult result = doHttpSend(phone, request);
+        if (result.success) {
+            logOutbound(request, phone, "SENT", null);
+            return true;
+        }
+        logOutbound(request, phone, "FAILED", result.error);
+        return false;
+    }
+
+    public boolean isBotUrlConfigured() {
+        return botBaseUrl != null && !botBaseUrl.isBlank();
+    }
+
+    public boolean isBotApiKeyConfigured() {
+        return botApiKey != null && !botApiKey.isBlank();
+    }
+
+    /**
+     * Bot /health erişilebilirlik kontrolü — URL/credential döndürmez.
+     */
+    public boolean pingBotHealth() {
+        if (!isBotUrlConfigured()) {
+            return false;
+        }
+        try {
+            String url = joinUrl(botBaseUrl.trim(), "/health");
+            HttpHeaders headers = new HttpHeaders();
+            if (isBotApiKeyConfigured()) {
+                headers.set(BotApiKeyGuard.HEADER_NAME, botApiKey);
+            }
+            ResponseEntity<String> resp = restTemplate.exchange(
+                    url,
+                    org.springframework.http.HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
+            );
+            return resp.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.warn("Bot health kontrolü başarısız: {}", e.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private SendResult doHttpSend(String phone, WhatsAppNotificationRequest request) {
         String url = joinUrl(botBaseUrl.trim(), "/send-notification");
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -111,15 +183,14 @@ public class WhatsAppNotificationClient {
                 body.put("technicianName", request.getTechnicianName());
             }
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-            restTemplate.postForEntity(url, entity, String.class);
+            restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
             log.info("WhatsApp bildirimi gönderildi: phone={} event={}",
                     maskPhone(phone), request.getEventType());
-            logOutbound(request, phone, "SENT", null);
+            return SendResult.ok();
         } catch (Exception e) {
             log.warn("WhatsApp bildirimi gönderilemedi: phone={}, reason={}",
                     maskPhone(phone), e.getClass().getSimpleName());
-            logOutbound(request, phone, "FAILED", e.getClass().getSimpleName());
+            return SendResult.fail(e.getClass().getSimpleName());
         }
     }
 
@@ -176,5 +247,23 @@ public class WhatsAppNotificationClient {
             return "***";
         }
         return digits.substring(0, 3) + "******" + digits.substring(digits.length() - 3);
+    }
+
+    private static final class SendResult {
+        final boolean success;
+        final String error;
+
+        private SendResult(boolean success, String error) {
+            this.success = success;
+            this.error = error;
+        }
+
+        static SendResult ok() {
+            return new SendResult(true, null);
+        }
+
+        static SendResult fail(String error) {
+            return new SendResult(false, error);
+        }
     }
 }

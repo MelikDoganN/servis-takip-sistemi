@@ -45,6 +45,9 @@ class WorkOrderWhatsAppNotifyTest {
     @Mock
     private WhatsAppNotificationClient whatsAppNotificationClient;
 
+    @Mock
+    private NotificationService notificationService;
+
     @InjectMocks
     private WorkOrderService workOrderService;
 

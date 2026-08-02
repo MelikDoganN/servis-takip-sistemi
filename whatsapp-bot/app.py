@@ -25,13 +25,75 @@ WHATSAPP_BOT_API_KEY = os.getenv("WHATSAPP_BOT_API_KEY")
 BOT_EMAIL = os.getenv("BOT_EMAIL")
 BOT_PASSWORD = os.getenv("BOT_PASSWORD")
 
-CONVERSATION_TTL_SEC = 300
-_conversation_state = {}
+CONVERSATION_TTL_SEC = int(os.getenv("CONVERSATION_TTL_SEC", "300"))
+RATE_LIMIT = int(os.getenv("BOT_RATE_LIMIT", "120"))
+RATE_LIMIT_WINDOW_SEC = int(os.getenv("BOT_RATE_LIMIT_WINDOW_SEC", "60"))
 
 bot_token = None
 
 OPEN_CUSTOMER_STATUSES = {"OPEN", "ASSIGNED", "WAITING_PARTS", "RESOLVED", "IN_PROGRESS"}
 OPEN_TECH_STATUSES = {"ASSIGNED", "WAITING_PARTS", "IN_PROGRESS"}
+
+
+class ConversationStateStore:
+    """Conversation state abstraction — Redis implementation later."""
+
+    def get(self, phone):
+        raise NotImplementedError
+
+    def set(self, phone, state, **data):
+        raise NotImplementedError
+
+    def clear(self, phone):
+        raise NotImplementedError
+
+
+class InMemoryConversationStateStore(ConversationStateStore):
+    def __init__(self, ttl_sec=300):
+        self._ttl = ttl_sec
+        self._data = {}
+
+    def _key(self, phone):
+        return normalize_phone(phone) or phone
+
+    def _purge(self):
+        now = time.time()
+        expired = [k for k, v in self._data.items() if v.get("expires", 0) < now]
+        for k in expired:
+            self._data.pop(k, None)
+
+    def get(self, phone):
+        self._purge()
+        return self._data.get(self._key(phone))
+
+    def set(self, phone, state, **data):
+        payload = {"state": state, "expires": time.time() + self._ttl}
+        payload.update(data)
+        self._data[self._key(phone)] = payload
+
+    def clear(self, phone):
+        self._data.pop(self._key(phone), None)
+
+
+conversation_store = InMemoryConversationStateStore(CONVERSATION_TTL_SEC)
+
+
+class InMemoryRateLimiter:
+    def __init__(self):
+        self._windows = {}
+
+    def allow(self, key, limit, window_sec):
+        now = time.time()
+        q = self._windows.setdefault(key, [])
+        cutoff = now - window_sec
+        self._windows[key] = [t for t in q if t >= cutoff]
+        if len(self._windows[key]) >= limit:
+            return False
+        self._windows[key].append(now)
+        return True
+
+
+rate_limiter = InMemoryRateLimiter()
 
 
 def normalize_phone(raw):
@@ -113,6 +175,15 @@ def require_api_key(request: Request):
     return None
 
 
+def check_rate_limit(request: Request, bucket: str):
+    api_key = request.headers.get("X-Bot-Api-Key") or ""
+    client = request.client.host if request.client else "unknown"
+    key = f"{bucket}:key:{hash(api_key)}" if api_key else f"{bucket}:ip:{client}"
+    if not rate_limiter.allow(key, RATE_LIMIT, RATE_LIMIT_WINDOW_SEC):
+        return JSONResponse(content={"status": "rate_limited"}, status_code=429)
+    return None
+
+
 def verify_meta_signature(raw_body: bytes, signature_header):
     if not WHATSAPP_APP_SECRET:
         log.error("WHATSAPP_APP_SECRET tanımlı değil; webhook reddedildi")
@@ -128,29 +199,16 @@ def verify_meta_signature(raw_body: bytes, signature_header):
     return hmac.compare_digest(digest, expected)
 
 
-def _purge_expired_conversations():
-    now = time.time()
-    expired = [k for k, v in _conversation_state.items() if v.get("expires", 0) < now]
-    for k in expired:
-        _conversation_state.pop(k, None)
-
-
 def get_conversation(phone):
-    _purge_expired_conversations()
-    key = normalize_phone(phone) or phone
-    return _conversation_state.get(key)
+    return conversation_store.get(phone)
 
 
 def set_conversation(phone, state, **data):
-    key = normalize_phone(phone) or phone
-    payload = {"state": state, "expires": time.time() + CONVERSATION_TTL_SEC}
-    payload.update(data)
-    _conversation_state[key] = payload
+    conversation_store.set(phone, state, **data)
 
 
 def clear_conversation(phone):
-    key = normalize_phone(phone) or phone
-    _conversation_state.pop(key, None)
+    conversation_store.clear(phone)
 
 
 def warranty_status_label(status):
@@ -453,7 +511,8 @@ def handle_tech_update_prompt(phone):
             desc = (o.get("description") or "")[:25]
             lines.append(f"ID {o['id']} — {o.get('status')} — {desc}")
         lines.append("Güncellemek için: !guncelle [ID] [DURUM]")
-        lines.append("Örnek: !guncelle 12 WAITING_PARTS")
+        lines.append("Örnek: !guncelle 12 IN_PROGRESS")
+        lines.append("Durumlar: IN_PROGRESS, WAITING_PARTS, RESOLVED, CANCELLED")
         set_conversation(phone, "AWAIT_TECH_UPDATE")
         return "\n".join(lines)
     except Exception as e:
@@ -515,6 +574,9 @@ async def verify_webhook(request: Request):
 
 @app.post("/webhook")
 async def webhook(request: Request):
+    limited = check_rate_limit(request, "webhook")
+    if limited:
+        return limited
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
     if not verify_meta_signature(raw_body, signature):
@@ -676,6 +738,9 @@ async def send_notification(request: Request):
     auth_error = require_api_key(request)
     if auth_error:
         return auth_error
+    limited = check_rate_limit(request, "send")
+    if limited:
+        return limited
     try:
         data = await request.json()
         phone = data.get("phone")
@@ -688,6 +753,20 @@ async def send_notification(request: Request):
     except Exception as e:
         log.warning("Bildirim hatası: %s", type(e).__name__)
         return JSONResponse(content={"status": "error"}, status_code=500)
+
+
+@app.get("/health")
+async def health(request: Request):
+    """Private/ops health — API key ile korunabilir."""
+    if WHATSAPP_BOT_API_KEY:
+        auth_error = require_api_key(request)
+        if auth_error:
+            return auth_error
+    return {
+        "status": "ok",
+        "botConfigured": bool(WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN),
+        "backendConfigured": bool(BACKEND_URL),
+    }
 
 
 @app.get("/")

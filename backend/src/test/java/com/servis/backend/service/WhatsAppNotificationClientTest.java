@@ -39,6 +39,9 @@ class WhatsAppNotificationClientTest {
     @Mock
     private BotInteractionLogService botInteractionLogService;
 
+    @Mock
+    private WhatsAppOutboxService whatsAppOutboxService;
+
     @InjectMocks
     private WhatsAppNotificationClient client;
 
@@ -117,6 +120,28 @@ class WhatsAppNotificationClientTest {
                 .thenThrow(new ResourceAccessException("Read timed out"));
 
         assertDoesNotThrow(() -> client.sendNotification("905551112233", "Merhaba"));
+    }
+
+    @Test
+    void sendNotification_HttpFail_EnqueuesOutbox() {
+        ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com");
+        ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
+        when(notificationDedupRepository.existsByWorkOrderIdAndEventTypeAndEventKey(any(), any(), any()))
+                .thenReturn(false);
+        when(notificationDedupRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenThrow(new ResourceAccessException("Read timed out"));
+        when(whatsAppOutboxService.enqueueIfAbsent(any(), anyString(), anyString())).thenReturn(true);
+
+        WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+        req.setPhone("905551112233");
+        req.setMessage("Merhaba");
+        req.setEventType(WhatsAppNotificationRequest.EVENT_STATUS_CHANGED);
+        req.setWorkOrderId(99L);
+        req.setTargetStatus("CLOSED");
+
+        assertDoesNotThrow(() -> client.sendNotification(req));
+        verify(whatsAppOutboxService).enqueueIfAbsent(any(), eq("905551112233"), anyString());
     }
 
     @Test

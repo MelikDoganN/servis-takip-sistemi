@@ -39,10 +39,11 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/**").permitAll()
-                // WhatsApp bot lookup (yalnızca bu özel path'ler)
+                // WhatsApp bot lookup + bot write hooks (API key ile korunur)
                 .requestMatchers("/api/customers/by-whatsapp/**").permitAll()
                 .requestMatchers("/api/technicians/by-whatsapp/**").permitAll()
-                .requestMatchers("/api/bot/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/bot/inbound-claim").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/bot/interactions").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

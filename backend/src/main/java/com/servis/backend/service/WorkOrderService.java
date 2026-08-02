@@ -50,6 +50,9 @@ public class WorkOrderService {
     @Autowired
     private WhatsAppNotificationClient whatsAppNotificationClient;
 
+    @Autowired
+    private NotificationService notificationService;
+
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
         return workOrderRepository.findAll(pageable);
     }
@@ -138,6 +141,7 @@ public class WorkOrderService {
         WorkOrder saved = workOrderRepository.save(toSave);
         saveHistory(saved, null, null, WorkOrderStatus.OPEN.name(), "İş emri oluşturuldu", "WEB");
 
+        notificationService.notifyWorkOrderCreated(saved);
         notifyWorkOrderCreated(saved);
 
         return saved;
@@ -167,13 +171,16 @@ public class WorkOrderService {
         workOrder.setStatus(newStatus);
         switch (newStatus) {
             case "ASSIGNED" -> workOrder.setAssignedAt(LocalDateTime.now());
+            case "IN_PROGRESS" -> { /* timestamp optional */ }
             case "WAITING_PARTS" -> workOrder.setWaitingForPartsSince(LocalDateTime.now());
             case "RESOLVED" -> workOrder.setCompletedAt(LocalDateTime.now());
             case "CLOSED" -> workOrder.setClosedAt(LocalDateTime.now());
+            case "CANCELLED" -> { /* terminal */ }
         }
 
         WorkOrder updated = workOrderRepository.save(workOrder);
         saveHistory(updated, changedBy, oldStatus, newStatus, oldStatus + " → " + newStatus, channel);
+        notificationService.notifyStatusChanged(updated, newStatus);
         notifyStatusChanged(updated, oldStatus, newStatus);
         return updated;
     }
@@ -185,8 +192,9 @@ public class WorkOrderService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Teknisyen bulunamadı: " + technicianId));
 
-        if (workOrder.getStatus().equals(WorkOrderStatus.CLOSED.name())) {
-            throw new RuntimeException("Kapalı iş emrine teknisyen atanamaz");
+        if (workOrder.getStatus().equals(WorkOrderStatus.CLOSED.name())
+                || workOrder.getStatus().equals(WorkOrderStatus.CANCELLED.name())) {
+            throw new RuntimeException("Kapalı veya iptal iş emrine teknisyen atanamaz");
         }
 
         Long previousTechId = workOrder.getTechnician() != null ? workOrder.getTechnician().getId() : null;
@@ -208,6 +216,10 @@ public class WorkOrderService {
         if (technicianChanged) {
             technician.setCurrentWorkload(technician.getCurrentWorkload() + 1);
             technicianRepository.save(technician);
+            String techName = technician.getUser() != null && technician.getUser().getFullName() != null
+                    ? technician.getUser().getFullName()
+                    : "teknisyen";
+            notificationService.notifyTechnicianAssigned(saved, techName);
             notifyTechnicianAssigned(saved, technician);
         }
 
@@ -354,25 +366,54 @@ public class WorkOrderService {
     }
 
     private void validateTransition(String oldStatus, String newStatus) {
+        if (newStatus == null || newStatus.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Geçersiz durum geçişi");
+        }
         switch (oldStatus) {
             case "OPEN" -> {
-                if (!newStatus.equals("ASSIGNED") && !newStatus.equals("CLOSED"))
-                    throw new RuntimeException("OPEN → sadece ASSIGNED veya CLOSED");
+                if (!newStatus.equals("ASSIGNED")
+                        && !newStatus.equals("CANCELLED")
+                        && !newStatus.equals("CLOSED")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "OPEN → sadece ASSIGNED, CANCELLED veya CLOSED");
+                }
             }
             case "ASSIGNED" -> {
-                if (!newStatus.equals("WAITING_PARTS") && !newStatus.equals("RESOLVED"))
-                    throw new RuntimeException("ASSIGNED → sadece WAITING_PARTS veya RESOLVED");
+                if (!newStatus.equals("IN_PROGRESS")
+                        && !newStatus.equals("WAITING_PARTS")
+                        && !newStatus.equals("CANCELLED")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "ASSIGNED → sadece IN_PROGRESS, WAITING_PARTS veya CANCELLED");
+                }
+            }
+            case "IN_PROGRESS" -> {
+                if (!newStatus.equals("WAITING_PARTS")
+                        && !newStatus.equals("RESOLVED")
+                        && !newStatus.equals("CANCELLED")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "IN_PROGRESS → sadece WAITING_PARTS, RESOLVED veya CANCELLED");
+                }
             }
             case "WAITING_PARTS" -> {
-                if (!newStatus.equals("ASSIGNED") && !newStatus.equals("RESOLVED"))
-                    throw new RuntimeException("WAITING_PARTS → sadece ASSIGNED veya RESOLVED");
+                if (!newStatus.equals("IN_PROGRESS")
+                        && !newStatus.equals("RESOLVED")
+                        && !newStatus.equals("CANCELLED")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "WAITING_PARTS → sadece IN_PROGRESS, RESOLVED veya CANCELLED");
+                }
             }
             case "RESOLVED" -> {
-                if (!newStatus.equals("CLOSED"))
-                    throw new RuntimeException("RESOLVED → sadece CLOSED");
+                if (!newStatus.equals("CLOSED")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "RESOLVED → sadece CLOSED");
+                }
             }
-            case "CLOSED" -> throw new RuntimeException("Kapatılmış iş emri değiştirilemez");
-            default -> throw new RuntimeException("Geçersiz durum: " + oldStatus);
+            case "CLOSED" -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Kapatılmış iş emri değiştirilemez");
+            case "CANCELLED" -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "İptal edilmiş iş emri değiştirilemez");
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Geçersiz durum: " + oldStatus);
         }
     }
 

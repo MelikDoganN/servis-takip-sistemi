@@ -63,7 +63,9 @@ def test_conversation_ttl():
     app_module.clear_conversation(phone)
     app_module.set_conversation(phone, "AWAIT_SERIAL")
     assert app_module.get_conversation(phone)["state"] == "AWAIT_SERIAL"
-    app_module._conversation_state[phone]["expires"] = time.time() - 1
+    store = app_module.conversation_store
+    key = store._key(phone)
+    store._data[key]["expires"] = time.time() - 1
     assert app_module.get_conversation(phone) is None
 
 

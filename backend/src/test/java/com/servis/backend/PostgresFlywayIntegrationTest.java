@@ -85,7 +85,7 @@ class PostgresFlywayIntegrationTest {
                 "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
         );
 
-        assertTrue(history.size() >= 6, "Expected at least V1-V6 migrations, got: " + history.size());
+        assertTrue(history.size() >= 7, "Expected at least V1-V7 migrations, got: " + history.size());
 
         Integer roles = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertEquals(5, roles);
@@ -177,5 +177,20 @@ class PostgresFlywayIntegrationTest {
                         + "AND column_name = 'external_message_id'",
                 Integer.class);
         assertEquals(1, extCol);
+    }
+
+    @Test
+    void notificationsAndOutboxTablesExist() {
+        Integer notifications = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' AND table_name = 'notifications'",
+                Integer.class);
+        assertEquals(1, notifications);
+
+        Integer outbox = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' AND table_name = 'whatsapp_outbox'",
+                Integer.class);
+        assertEquals(1, outbox);
     }
 }

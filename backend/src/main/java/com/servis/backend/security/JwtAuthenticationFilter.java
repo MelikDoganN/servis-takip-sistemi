@@ -27,11 +27,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/auth/") || 
-               path.startsWith("/h2-console/") ||
-               path.startsWith("/api/customers/by-whatsapp/") ||
-               path.startsWith("/api/technicians/by-whatsapp/") ||
-               path.startsWith("/api/bot/");
+        if (path.startsWith("/auth/") || path.startsWith("/h2-console/")) {
+            return true;
+        }
+        if (path.startsWith("/api/customers/by-whatsapp/")
+                || path.startsWith("/api/technicians/by-whatsapp/")) {
+            return true;
+        }
+        String method = request.getMethod();
+        return "POST".equalsIgnoreCase(method)
+                && (path.equals("/api/bot/inbound-claim") || path.equals("/api/bot/interactions"));
     }
 
     @Override
