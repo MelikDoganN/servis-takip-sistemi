@@ -9,6 +9,7 @@ public class WarrantyDeviceInfoDto {
     private String deviceName;
     private String brand;
     private String model;
+    private String customerName;
     private String serialNumber;
     private LocalDate warrantyStart;
     private LocalDate warrantyEnd;
@@ -37,6 +38,14 @@ public class WarrantyDeviceInfoDto {
 
     public void setModel(String model) {
         this.model = model;
+    }
+
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
     }
 
     public String getSerialNumber() {

@@ -85,7 +85,7 @@ class PostgresFlywayIntegrationTest {
                 "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
         );
 
-        assertTrue(history.size() >= 4, "Expected at least V1-V4 migrations, got: " + history.size());
+        assertTrue(history.size() >= 5, "Expected at least V1-V5 migrations, got: " + history.size());
 
         Integer roles = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertEquals(5, roles);
@@ -103,6 +103,55 @@ class PostgresFlywayIntegrationTest {
                         + "WHERE table_schema = 'public' AND table_name = 'work_order_attachments'",
                 Integer.class);
         assertEquals(1, tables);
+    }
+
+    @Test
+    void seedBrandsAndModelsPresentAndIdempotent() {
+        Integer brandCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM brands WHERE name IN ('Apple','Samsung','Lenovo','HP')",
+                Integer.class);
+        assertEquals(4, brandCount);
+
+        Integer modelCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM device_models dm "
+                        + "JOIN brands b ON b.id = dm.brand_id "
+                        + "WHERE (b.name = 'Apple' AND dm.name = 'MacBook Air') "
+                        + "   OR (b.name = 'Samsung' AND dm.name = 'Galaxy Book') "
+                        + "   OR (b.name = 'Lenovo' AND dm.name = 'ThinkPad') "
+                        + "   OR (b.name = 'HP' AND dm.name = 'ProBook')",
+                Integer.class);
+        assertEquals(4, modelCount);
+
+        // V5 idempotent INSERT'lerini tekrar çalıştır — duplicate üretmemeli
+        jdbcTemplate.execute("""
+                INSERT INTO brands (name, description, is_active)
+                SELECT 'Apple', 'Seed marka', TRUE
+                WHERE NOT EXISTS (SELECT 1 FROM brands WHERE lower(name) = lower('Apple'))
+                """);
+        jdbcTemplate.execute("""
+                INSERT INTO device_models (
+                    brand_id, name, device_type,
+                    general_warranty_months, parts_warranty_months, labor_warranty_months, is_active
+                )
+                SELECT b.id, 'MacBook Air', 'LAPTOP', 24, 12, 12, TRUE
+                FROM brands b
+                WHERE lower(b.name) = lower('Apple')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM device_models m
+                      WHERE m.brand_id = b.id AND lower(m.name) = lower('MacBook Air')
+                  )
+                """);
+
+        Integer brandCountAfter = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM brands WHERE lower(name) = lower('Apple')", Integer.class);
+        assertEquals(1, brandCountAfter);
+
+        Integer modelCountAfter = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM device_models dm "
+                        + "JOIN brands b ON b.id = dm.brand_id "
+                        + "WHERE lower(b.name) = lower('Apple') AND lower(dm.name) = lower('MacBook Air')",
+                Integer.class);
+        assertEquals(1, modelCountAfter);
     }
 
     @Test

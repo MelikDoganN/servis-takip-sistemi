@@ -18,4 +18,6 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrder, Long> {
     List<WorkOrder> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
     List<WorkOrder> findByDeviceId(Long deviceId);
     Page<WorkOrder> findByTechnicianId(Long technicianId, Pageable pageable);
+
+    boolean existsByDeviceId(Long deviceId);
 }

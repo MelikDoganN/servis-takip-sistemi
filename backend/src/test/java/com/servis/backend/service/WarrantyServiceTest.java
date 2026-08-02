@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -58,6 +59,8 @@ class WarrantyServiceTest {
     @Test
     void createWarrantyRecord_Parts_ShouldCalculateCorrectEndDate() {
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(warrantyRecordRepository.findByDeviceIdAndWarrantyType(1L, "PARTS"))
+                .thenReturn(Optional.empty());
         when(warrantyRecordRepository.save(any(WarrantyRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         WarrantyRecord record = warrantyService.createWarrantyRecord(1L, "PARTS");
@@ -65,7 +68,7 @@ class WarrantyServiceTest {
         assertNotNull(record);
         assertEquals("PARTS", record.getWarrantyType());
         assertEquals(LocalDate.of(2025, 1, 1), record.getStartDate());
-        assertEquals(LocalDate.of(2027, 1, 1), record.getEndDate()); // 24 ay eklendi
+        assertEquals(LocalDate.of(2027, 1, 1), record.getEndDate());
     }
 
     @Test
@@ -74,12 +77,42 @@ class WarrantyServiceTest {
         device.setInstallationDate(LocalDate.of(2025, 6, 1));
 
         when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(warrantyRecordRepository.findByDeviceIdAndWarrantyType(1L, "LABOR"))
+                .thenReturn(Optional.empty());
         when(warrantyRecordRepository.save(any(WarrantyRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         WarrantyRecord record = warrantyService.createWarrantyRecord(1L, "LABOR");
 
         assertEquals(LocalDate.of(2025, 6, 1), record.getStartDate());
-        assertEquals(LocalDate.of(2026, 6, 1), record.getEndDate()); // 12 ay
+        assertEquals(LocalDate.of(2026, 6, 1), record.getEndDate());
+    }
+
+    @Test
+    void createWarrantyRecord_NegativeMonths_Throws400() {
+        model.setPartsWarrantyMonths(-1);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(warrantyRecordRepository.findByDeviceIdAndWarrantyType(1L, "PARTS"))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> warrantyService.createWarrantyRecord(1L, "PARTS")
+        );
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
+    void createWarrantyRecord_NullMonths_Throws400() {
+        model.setPartsWarrantyMonths(null);
+        when(deviceRepository.findById(1L)).thenReturn(Optional.of(device));
+        when(warrantyRecordRepository.findByDeviceIdAndWarrantyType(1L, "PARTS"))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> warrantyService.createWarrantyRecord(1L, "PARTS")
+        );
+        assertEquals(400, ex.getStatusCode().value());
     }
 
     @Test

@@ -60,11 +60,18 @@ public class GlobalExceptionHandler {
             status = HttpStatus.NOT_FOUND;
         } else if (message.contains("yetkiniz yok") || message.contains("erişim")) {
             status = HttpStatus.FORBIDDEN;
+        } else if (message.contains("silinemez")
+                || message.contains("zaten var")
+                || message.contains("zaten kayıtlı")
+                || message.contains("zaten mevcut")) {
+            status = HttpStatus.CONFLICT;
         } else if (message.contains("zorunlu")
                 || message.contains("geçersiz")
-                || message.contains("zaten kayıtlı")
                 || message.contains("zaten kullanılıyor")
-                || message.contains("ait değildir")) {
+                || message.contains("ait değildir")
+                || message.contains("negatif")
+                || message.contains("tanımlı değil")
+                || message.contains("tarihi bulunamadı")) {
             status = HttpStatus.BAD_REQUEST;
         }
         return ResponseEntity.status(status).body(Map.of("error", message));

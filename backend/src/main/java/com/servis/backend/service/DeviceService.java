@@ -6,9 +6,11 @@ import com.servis.backend.entity.DeviceModel;
 import com.servis.backend.repository.CustomerRepository;
 import com.servis.backend.repository.DeviceModelRepository;
 import com.servis.backend.repository.DeviceRepository;
+import com.servis.backend.repository.WorkOrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -25,6 +27,12 @@ public class DeviceService {
     @Autowired
     private DeviceModelRepository deviceModelRepository;
 
+    @Autowired
+    private WorkOrderRepository workOrderRepository;
+
+    @Autowired
+    private WarrantyService warrantyService;
+
     public List<Device> getAllDevices() {
         return deviceRepository.findAll();
     }
@@ -34,6 +42,7 @@ public class DeviceService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cihaz bulunamadı: " + id));
     }
 
+    @Transactional
     public Device createDevice(Device device) {
         Long customerId = requireAssociationId(device.getCustomer(), "Müşteri zorunludur");
         Long modelId = requireAssociationId(device.getModel(), "Model zorunludur");
@@ -59,7 +68,12 @@ public class DeviceService {
         toSave.setSerialNumber(serial);
         toSave.setPurchaseDate(device.getPurchaseDate());
         toSave.setInstallationDate(device.getInstallationDate());
-        return deviceRepository.save(toSave);
+        Device saved = deviceRepository.save(toSave);
+
+        // Tarih + GENERAL ay tanımlıysa otomatik GENERAL kaydı (duplicate üretmez)
+        warrantyService.tryCreateGeneralWarrantyIfPossible(saved.getId());
+
+        return saved;
     }
 
     public Device updateDevice(Long id, Device deviceDetails) {
@@ -96,6 +110,12 @@ public class DeviceService {
     public void deleteDevice(Long id) {
         if (!deviceRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cihaz bulunamadı: " + id);
+        }
+        if (workOrderRepository.existsByDeviceId(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Bu cihaza bağlı iş emirleri bulunduğu için cihaz silinemez."
+            );
         }
         deviceRepository.deleteById(id);
     }
