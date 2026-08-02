@@ -40,6 +40,7 @@ import {
   roleLabel,
 } from "@/types/role";
 import { formatDateTime } from "@/lib/utils";
+import { BotHealthCard } from "@/components/admin/BotHealthCard";
 
 interface FormErrors {
   fullName?: string;
@@ -362,6 +363,8 @@ export default function KullaniciYonetimiPage() {
       />
 
       {error && <ErrorMessage message={error} />}
+
+      {!forbidden && <BotHealthCard />}
 
       {forbidden ? (
         <SectionCard title="Yetki Gerekli">

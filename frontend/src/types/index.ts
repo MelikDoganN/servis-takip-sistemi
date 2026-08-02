@@ -11,3 +11,4 @@ export * from "./technician";
 export * from "./user";
 export * from "./warranty";
 export * from "./workOrder";
+export * from "./notification";

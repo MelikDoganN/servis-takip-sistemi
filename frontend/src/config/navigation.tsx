@@ -8,6 +8,8 @@ import {
   BarChart3,
   UserCog,
   Wrench,
+  Bell,
+  MessageSquare,
 } from "lucide-react";
 
 export interface NavItem {
@@ -25,6 +27,18 @@ export const navItems: NavItem[] = [
     description: "Operasyonel özet",
     roles: ["ROLE_ADMIN", "ROLE_REGION_MANAGER", "ROLE_CENTER_OPERATOR"],
     icon: <LayoutDashboard className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
+  },
+  {
+    label: "Bildirimler",
+    href: "/bildirimler",
+    description: "Sistem bildirimleri",
+    roles: [
+      "ROLE_ADMIN",
+      "ROLE_REGION_MANAGER",
+      "ROLE_CENTER_OPERATOR",
+      "ROLE_TECHNICIAN",
+    ],
+    icon: <Bell className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
   },
   {
     label: "Müşteriler",
@@ -74,5 +88,12 @@ export const navItems: NavItem[] = [
     description: "Kullanıcı kayıtları",
     roles: ["ROLE_ADMIN"],
     icon: <UserCog className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
+  },
+  {
+    label: "WhatsApp İşlemleri",
+    href: "/whatsapp-islemleri",
+    description: "Bot etkileşim logları",
+    roles: ["ROLE_ADMIN"],
+    icon: <MessageSquare className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
   },
 ];
