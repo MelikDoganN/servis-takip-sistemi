@@ -48,6 +48,12 @@ export const workOrderService = {
     return apiClient<WorkOrder>(`/api/workorders/${id}`);
   },
 
+  getByServiceNumber(serviceNumber: string): Promise<WorkOrder> {
+    return apiClient<WorkOrder>(
+      `/api/workorders/by-service-number/${encodeURIComponent(serviceNumber)}`
+    );
+  },
+
   create(data: CreateWorkOrderRequest): Promise<WorkOrder> {
     return apiClient<WorkOrder>("/api/workorders", {
       method: "POST",

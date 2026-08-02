@@ -152,6 +152,7 @@ export function GlobalSearch() {
         .filter(
           (wo) =>
             wo.description?.toLowerCase().includes(q) ||
+            wo.serviceNumber?.toLowerCase().includes(q) ||
             wo.customer?.fullName?.toLowerCase().includes(q) ||
             wo.device?.serialNumber?.toLowerCase().includes(q) ||
             wo.technician?.user?.fullName?.toLowerCase().includes(q)
@@ -161,11 +162,13 @@ export function GlobalSearch() {
           items.push({
             id: `workorder-${wo.id}`,
             category: "workorder",
-            title: wo.customer?.fullName || "İş emri",
+            title: wo.serviceNumber || wo.customer?.fullName || "İş emri",
             subtitle: `${WORK_ORDER_STATUS_LABELS[wo.status] ?? wo.status}${
               wo.device?.serialNumber ? ` · ${wo.device.serialNumber}` : ""
             }`,
-            href: `/is-emirleri?q=${encodeURIComponent(wo.customer?.fullName || wo.device?.serialNumber || "")}`,
+            href: wo.serviceNumber
+              ? `/is-emirleri?serviceNo=${encodeURIComponent(wo.serviceNumber)}`
+              : `/is-emirleri?id=${wo.id}`,
           })
         );
 

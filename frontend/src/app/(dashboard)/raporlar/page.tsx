@@ -57,9 +57,11 @@ import { WorkOrderPdfModal } from "@/components/workorders/WorkOrderPdfModal";
 const STATUS_BAR_COLORS: Record<WorkOrderStatus, string> = {
   OPEN: "bg-amber-500",
   ASSIGNED: "bg-sky-500",
+  IN_PROGRESS: "bg-indigo-500",
   WAITING_PARTS: "bg-orange-500",
   RESOLVED: "bg-teal-500",
   CLOSED: "bg-slate-400",
+  CANCELLED: "bg-rose-400",
 };
 
 function statusBadgeVariant(
@@ -70,12 +72,16 @@ function statusBadgeVariant(
       return "warning";
     case "ASSIGNED":
       return "info";
+    case "IN_PROGRESS":
+      return "info";
     case "WAITING_PARTS":
       return "default";
     case "RESOLVED":
       return "success";
     case "CLOSED":
       return "neutral";
+    case "CANCELLED":
+      return "danger";
     default:
       return "neutral";
   }

@@ -7,9 +7,11 @@ import { User } from "./user";
 export type WorkOrderStatus =
   | "OPEN"
   | "ASSIGNED"
+  | "IN_PROGRESS"
   | "WAITING_PARTS"
   | "RESOLVED"
-  | "CLOSED";
+  | "CLOSED"
+  | "CANCELLED";
 
 export type WorkOrderPriority = "LOW" | "MEDIUM" | "HIGH";
 
@@ -18,17 +20,21 @@ export type ServiceType = "WARRANTY" | "PAID";
 export const WORK_ORDER_STATUSES: WorkOrderStatus[] = [
   "OPEN",
   "ASSIGNED",
+  "IN_PROGRESS",
   "WAITING_PARTS",
   "RESOLVED",
   "CLOSED",
+  "CANCELLED",
 ];
 
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   OPEN: "Açık",
-  ASSIGNED: "Atandı",
+  ASSIGNED: "Teknisyen Atandı",
+  IN_PROGRESS: "İşlemde",
   WAITING_PARTS: "Parça Bekliyor",
   RESOLVED: "Çözüldü",
-  CLOSED: "Kapalı",
+  CLOSED: "Kapatıldı",
+  CANCELLED: "İptal Edildi",
 };
 
 export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
@@ -42,17 +48,20 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   PAID: "Ücretli",
 };
 
-/** Backend state machine geçişleri */
+/** Backend state machine geçişleri ile birebir */
 export const WORK_ORDER_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
-  OPEN: ["ASSIGNED", "CLOSED"],
-  ASSIGNED: ["WAITING_PARTS", "RESOLVED"],
-  WAITING_PARTS: ["ASSIGNED", "RESOLVED"],
+  OPEN: ["ASSIGNED", "CANCELLED", "CLOSED"],
+  ASSIGNED: ["IN_PROGRESS", "WAITING_PARTS", "CANCELLED"],
+  IN_PROGRESS: ["WAITING_PARTS", "RESOLVED", "CANCELLED"],
+  WAITING_PARTS: ["IN_PROGRESS", "RESOLVED", "CANCELLED"],
   RESOLVED: ["CLOSED"],
   CLOSED: [],
+  CANCELLED: [],
 };
 
 export interface WorkOrder {
   id: number;
+  serviceNumber: string;
   customer: Customer;
   device: Device;
   technician: Technician | null;

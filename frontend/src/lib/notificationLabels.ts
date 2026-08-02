@@ -43,8 +43,14 @@ export function notificationHref(n: NotificationDto): string | null {
   const entity = n.relatedEntityType as RelatedEntityType | null;
   const id = n.relatedEntityId;
   switch (entity) {
-    case "WORK_ORDER":
+    case "WORK_ORDER": {
+      // Mesajdaki Servis No varsa serviceNo deep-link; yoksa id
+      const fromMessage = extractServiceNumber(n.message);
+      if (fromMessage) {
+        return `/is-emirleri?serviceNo=${encodeURIComponent(fromMessage)}`;
+      }
       return id != null ? `/is-emirleri?id=${id}` : "/is-emirleri";
+    }
     case "DEVICE":
       return id != null ? `/cihazlar?id=${id}` : "/cihazlar";
     case "CUSTOMER":
@@ -54,4 +60,12 @@ export function notificationHref(n: NotificationDto): string | null {
     default:
       return null;
   }
+}
+
+const SERVICE_NO_RE = /SRV-\d{4}-\d{6,}/i;
+
+export function extractServiceNumber(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const m = text.match(SERVICE_NO_RE);
+  return m ? m[0].toUpperCase() : null;
 }

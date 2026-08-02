@@ -10,6 +10,7 @@ import {
   FileText,
   Upload,
   Paperclip,
+  Copy,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -66,7 +67,7 @@ import {
 import { WorkOrderPdfModal } from "@/components/workorders/WorkOrderPdfModal";
 
 type ViewMode = "list" | "kanban";
-type ModalMode = "create" | "detail" | "status" | "assign" | "pdf" | null;
+type ModalMode = "create" | "detail" | "status" | "assign" | "pdf" | "created" | null;
 
 function statusBadgeVariant(
   status: WorkOrderStatus
@@ -76,12 +77,16 @@ function statusBadgeVariant(
       return "warning";
     case "ASSIGNED":
       return "info";
+    case "IN_PROGRESS":
+      return "info";
     case "WAITING_PARTS":
       return "default";
     case "RESOLVED":
       return "success";
     case "CLOSED":
       return "neutral";
+    case "CANCELLED":
+      return "danger";
     default:
       return "neutral";
   }
@@ -124,6 +129,10 @@ export default function IsEmirleriPage() {
   const [attachments, setAttachments] = useState<WorkOrderAttachment[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [createdServiceNumber, setCreatedServiceNumber] = useState<string | null>(
+    null
+  );
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   const [customerId, setCustomerId] = useState("");
   const [deviceId, setDeviceId] = useState("");
@@ -177,9 +186,52 @@ export default function IsEmirleriPage() {
   }, [loadLookups]);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("q");
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q");
     if (q) setSearch(q);
   }, []);
+
+  useEffect(() => {
+    if (loading || deepLinkHandled) return;
+    const params = new URLSearchParams(window.location.search);
+    const serviceNo = params.get("serviceNo");
+    const idParam = params.get("id");
+    if (!serviceNo && !idParam) {
+      setDeepLinkHandled(true);
+      return;
+    }
+
+    const openFromDeepLink = async () => {
+      setDeepLinkHandled(true);
+      try {
+        if (serviceNo) {
+          const wo = await workOrderService.getByServiceNumber(serviceNo);
+          await openDetail(wo.id);
+          return;
+        }
+        if (idParam) {
+          const id = Number(idParam);
+          if (!Number.isFinite(id)) {
+            toast.error("Geçersiz iş emri bağlantısı");
+            return;
+          }
+          // Liste yüklendiyse serviceNumber ile de eşleştirmeyi dene
+          const fromList = workOrders.find((w) => w.id === id);
+          if (fromList?.serviceNumber) {
+            await openDetail(fromList.id);
+          } else {
+            await openDetail(id);
+          }
+        }
+      } catch (err) {
+        const apiErr = err as ApiError;
+        toast.error(apiErr.message || "Kayıt bulunamadı");
+      }
+    };
+    void openFromDeepLink();
+    // openDetail/workOrders bilinçli olarak dışarıda; deep link bir kez işlenir
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, deepLinkHandled, workOrders, toast]);
 
   useEffect(() => {
     if (view === "list") {
@@ -201,6 +253,7 @@ export default function IsEmirleriPage() {
     if (!q) return list;
     return list.filter((wo) => {
       return (
+        wo.serviceNumber?.toLowerCase().includes(q) ||
         wo.description?.toLowerCase().includes(q) ||
         wo.customer?.fullName?.toLowerCase().includes(q) ||
         wo.device?.serialNumber?.toLowerCase().includes(q) ||
@@ -228,6 +281,15 @@ export default function IsEmirleriPage() {
     else void loadKanban();
   };
 
+  const copyServiceNumber = async (serviceNumber: string) => {
+    try {
+      await navigator.clipboard.writeText(serviceNumber);
+      toast.success("Servis numarası kopyalandı.");
+    } catch {
+      toast.error("Kopyalama başarısız");
+    }
+  };
+
   const closeModal = () => {
     setModalMode(null);
     setSelected(null);
@@ -242,6 +304,9 @@ export default function IsEmirleriPage() {
     setDescription("");
     setPriority("MEDIUM");
     setServiceType("WARRANTY");
+    if (modalMode !== "created") {
+      setCreatedServiceNumber(null);
+    }
   };
 
   const openCreate = () => {
@@ -356,9 +421,16 @@ export default function IsEmirleriPage() {
 
     setActionLoading(true);
     try {
-      await workOrderService.create(payload);
-      toast.success("İş emri oluşturuldu");
-      closeModal();
+      const created = await workOrderService.create(payload);
+      setCreatedServiceNumber(created.serviceNumber);
+      setModalMode("created");
+      setSelected(null);
+      setActionError("");
+      setCustomerId("");
+      setDeviceId("");
+      setDescription("");
+      setPriority("MEDIUM");
+      setServiceType("WARRANTY");
       refresh();
     } catch (err) {
       const apiErr = err as ApiError;
@@ -402,7 +474,8 @@ export default function IsEmirleriPage() {
     }
   };
 
-  const canAssign = (wo: WorkOrder) => wo.status !== "CLOSED";
+  const canAssign = (wo: WorkOrder) =>
+    wo.status !== "CLOSED" && wo.status !== "CANCELLED";
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -489,6 +562,7 @@ export default function IsEmirleriPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Servis No</TableHead>
                       <TableHead>Müşteri</TableHead>
                       <TableHead>Cihaz</TableHead>
                       <TableHead>Teknisyen</TableHead>
@@ -501,6 +575,23 @@ export default function IsEmirleriPage() {
                   <TableBody>
                     {paginated.map((wo) => (
                       <TableRow key={wo.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-sm font-semibold text-slate-900">
+                              {wo.serviceNumber || "—"}
+                            </span>
+                            {wo.serviceNumber && (
+                              <button
+                                type="button"
+                                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                title="Kopyala"
+                                onClick={() => copyServiceNumber(wo.serviceNumber)}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="font-medium text-slate-900">
                           {wo.customer?.fullName || "—"}
                         </TableCell>
@@ -565,7 +656,21 @@ export default function IsEmirleriPage() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-slate-900">
+                        <div className="flex items-center gap-1.5">
+                            <p className="font-mono text-sm font-semibold text-sky-700">
+                              {wo.serviceNumber || "—"}
+                            </p>
+                          {wo.serviceNumber && (
+                            <button
+                              type="button"
+                              className="rounded p-1 text-slate-400 hover:bg-slate-100"
+                              onClick={() => copyServiceNumber(wo.serviceNumber)}
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="mt-1 font-semibold text-slate-900">
                           {wo.customer?.fullName || "Müşteri yok"}
                         </p>
                         <p className="text-sm text-slate-600">
@@ -788,9 +893,11 @@ export default function IsEmirleriPage() {
         isOpen={modalMode === "detail"}
         onClose={closeModal}
         title={
-          selected?.customer?.fullName
-            ? `İş Emri — ${selected.customer.fullName}`
-            : "İş Emri Detayı"
+          selected?.serviceNumber
+            ? `Servis Kaydı — ${selected.serviceNumber}`
+            : selected?.customer?.fullName
+              ? `İş Emri — ${selected.customer.fullName}`
+              : "İş Emri Detayı"
         }
         size="lg"
       >
@@ -803,6 +910,29 @@ export default function IsEmirleriPage() {
             {actionError && <ErrorMessage message={actionError} />}
             <DetailList
               items={[
+                {
+                  label: "Servis No",
+                  value: (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold">
+                        {selected.serviceNumber || "—"}
+                      </span>
+                      {selected.serviceNumber && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            copyServiceNumber(selected.serviceNumber)
+                          }
+                        >
+                          <Copy className="mr-1 h-3.5 w-3.5" />
+                          Kopyala
+                        </Button>
+                      )}
+                    </div>
+                  ),
+                },
                 {
                   label: "Durum",
                   value: (
@@ -1132,6 +1262,52 @@ export default function IsEmirleriPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={modalMode === "created"}
+        onClose={() => {
+          setCreatedServiceNumber(null);
+          closeModal();
+        }}
+        title="Servis kaydı oluşturuldu"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Servis kaydı oluşturuldu.</p>
+          {createdServiceNumber && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Servis No
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <p className="select-all font-mono text-lg font-semibold text-slate-900">
+                  {createdServiceNumber}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => copyServiceNumber(createdServiceNumber)}
+                >
+                  <Copy className="mr-1 h-3.5 w-3.5" />
+                  Kopyala
+                </Button>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              onClick={() => {
+                setCreatedServiceNumber(null);
+                closeModal();
+              }}
+            >
+              Tamam
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <WorkOrderPdfModal

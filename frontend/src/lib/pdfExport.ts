@@ -250,7 +250,10 @@ function buildSingleWorkOrderDoc(data: SingleWorkOrderPdfData): jsPDF {
 
   doc.setFontSize(12);
   doc.setTextColor(18, 167, 205);
-  doc.text(t("Is Emri Detay Raporu"), 14, 26);
+  const title = data.workOrderNo
+    ? `Servis Kaydi ${data.workOrderNo}`
+    : "Is Emri Detay Raporu";
+  doc.text(t(title), 14, 26);
 
   doc.setFontSize(10);
   doc.setTextColor(100);
@@ -260,7 +263,7 @@ function buildSingleWorkOrderDoc(data: SingleWorkOrderPdfData): jsPDF {
     startY: 40,
     head: [[t("Alan"), t("Deger")]],
     body: [
-      [t("Is Emri No"), t(data.workOrderNo)],
+      [t("Servis No"), t(data.workOrderNo)],
       [t("Musteri"), t(data.customerName)],
       [t("Musteri Telefon"), t(data.customerPhone)],
       [t("Musteri E-posta"), t(data.customerEmail)],

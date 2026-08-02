@@ -37,12 +37,16 @@ function statusBadgeVariant(
       return "warning";
     case "ASSIGNED":
       return "info";
+    case "IN_PROGRESS":
+      return "info";
     case "WAITING_PARTS":
       return "default";
     case "RESOLVED":
       return "success";
     case "CLOSED":
       return "neutral";
+    case "CANCELLED":
+      return "danger";
     default:
       return "neutral";
   }
@@ -54,7 +58,7 @@ function toPdfData(
   attachments: WorkOrderAttachment[]
 ): SingleWorkOrderPdfData {
   return {
-    workOrderNo: `WO-${wo.id}`,
+    workOrderNo: wo.serviceNumber || `WO-${wo.id}`,
     companyTitle: "Servis Takip Sistemi",
     customerName: wo.customer?.fullName || "-",
     customerPhone: wo.customer?.phone || undefined,
