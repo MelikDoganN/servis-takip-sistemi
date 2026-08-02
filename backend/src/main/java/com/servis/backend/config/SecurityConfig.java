@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/devices/**").permitAll()     
                 .requestMatchers("/api/warranty/**").permitAll()
                 .requestMatchers("/api/customers/by-whatsapp/**").permitAll()
+                .requestMatchers("/api/technicians/by-whatsapp/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

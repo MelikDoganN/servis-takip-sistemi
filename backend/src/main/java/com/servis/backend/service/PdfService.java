@@ -41,7 +41,7 @@ public class PdfService {
         // TÜRKÇE KARAKTER DESTEĞİ (En garanti yöntem)
         PdfFont font = PdfFontFactory.createFont("Helvetica", "Cp1254"); // Türkçe karakter desteği
 
-        document.add(new Paragraph("İŞ EMRİ DETAYLARI").setFont(font).setBold().setFontSize(18));
+        document.add(new Paragraph("İŞ EMRİ DETAYLARI").setFont(font).setFontSize(18));
         document.add(new Paragraph(" "));
 
         document.add(new Paragraph("ID: " + workOrder.getId()).setFont(font));
@@ -60,7 +60,7 @@ public class PdfService {
         List<WorkOrderAttachment> attachments = attachmentRepository.findByWorkOrderId(workOrderId);
         if (!attachments.isEmpty()) {
             document.add(new Paragraph(" "));
-            document.add(new Paragraph("--- EKLENEN FOTOĞRAFLAR ---").setFont(font).setBold());
+            document.add(new Paragraph("--- EKLENEN FOTOĞRAFLAR ---").setFont(font));
             for (WorkOrderAttachment att : attachments) {
                 if (att.getMimeType() != null && att.getMimeType().startsWith("image/")) {
                     try {
