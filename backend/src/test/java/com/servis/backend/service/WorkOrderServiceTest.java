@@ -42,6 +42,9 @@ class WorkOrderServiceTest {
     @Mock
     private RegionRepository regionRepository;
 
+    @Mock
+    private WhatsAppNotificationClient whatsAppNotificationClient;
+
     @InjectMocks
     private WorkOrderService workOrderService;
 

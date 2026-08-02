@@ -13,7 +13,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -43,7 +42,7 @@ public class WorkOrderService {
     private RegionRepository regionRepository;
 
     @Autowired
-    private RestTemplate restTemplate;
+    private WhatsAppNotificationClient whatsAppNotificationClient;
 
     // === LİSTELEME (Sayfalama Destekli) ===
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
@@ -130,21 +129,14 @@ public class WorkOrderService {
         WorkOrder saved = workOrderRepository.save(toSave);
         saveHistory(saved, null, WorkOrderStatus.OPEN.name(), "İş emri oluşturuldu", "WEB");
 
-        // WhatsApp bildirimi (remote taraf)
+        // WhatsApp bildirimi — URL/API key yoksa veya bot kapalıysa create yine başarılı
         String customerPhone = saved.getCustomer().getWhatsappNumber();
         if (customerPhone != null && !customerPhone.isEmpty()) {
             String message = String.format(
                     "Arıza kaydınız alındı. İş emri numaranız: %d\nDurumunuzu öğrenmek için: !durum %d\nGaranti sorgulamak için: !garanti %s",
                     saved.getId(), saved.getId(), saved.getDevice().getSerialNumber()
             );
-            try {
-                String botUrl = "http://localhost:8000/send-notification";
-                Map<String, String> payload = Map.of("phone", customerPhone, "message", message);
-                restTemplate.postForEntity(botUrl, payload, String.class);
-                System.out.println("✅ Bildirim gönderildi: " + customerPhone);
-            } catch (Exception e) {
-                System.err.println("❌ Bildirim gönderilemedi: " + e.getMessage());
-            }
+            whatsAppNotificationClient.sendNotification(customerPhone, message);
         }
 
         return saved;
