@@ -1,15 +1,20 @@
 package com.servis.backend.service;
 
 import com.servis.backend.entity.*;
+import com.servis.backend.repository.CustomerRepository;
+import com.servis.backend.repository.DeviceRepository;
+import com.servis.backend.repository.RegionRepository;
 import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.WorkOrderRepository;
 import com.servis.backend.repository.WorkOrderStatusHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,7 +34,16 @@ public class WorkOrderService {
     private TechnicianRepository technicianRepository;
 
     @Autowired
-    private RestTemplate restTemplate;  // <-- EKLENDİ
+    private CustomerRepository customerRepository;
+
+    @Autowired
+    private DeviceRepository deviceRepository;
+
+    @Autowired
+    private RegionRepository regionRepository;
+
+    @Autowired
+    private RestTemplate restTemplate;
 
     // === LİSTELEME (Sayfalama Destekli) ===
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
@@ -40,29 +54,83 @@ public class WorkOrderService {
         return workOrderRepository.findByStatus(status, pageable);
     }
 
-    // === TEKNİSYEN ID'YE GÖRE LİSTELEME (17. Gün) ===
     public Page<WorkOrder> getWorkOrdersByTechnicianId(Long technicianId, Pageable pageable) {
         return workOrderRepository.findByTechnicianId(technicianId, pageable);
     }
 
-    // === LİSTELEME (Sayfalama Yok - Eski Metotlar) ===
     public List<WorkOrder> getAllWorkOrders() {
         return workOrderRepository.findAll();
     }
 
     public WorkOrder getWorkOrderById(Long id) {
         return workOrderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("İş emri bulunamadı: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "İş emri bulunamadı: " + id));
     }
 
-    // === İŞ EMRİ OLUŞTURMA ===
+    /**
+     * Client stub ID'lerini repository'den gerçek entity'lere çevirir.
+     * createdBy controller tarafından principal'dan set edilmiş olmalıdır.
+     */
     @Transactional
     public WorkOrder createWorkOrder(WorkOrder workOrder) {
-        workOrder.setStatus(WorkOrderStatus.OPEN.name());
-        WorkOrder saved = workOrderRepository.save(workOrder);
+        if (workOrder.getCreatedBy() == null || workOrder.getCreatedBy().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Kimlik doğrulama gerekli");
+        }
+
+        Long customerId = workOrder.getCustomer() != null ? workOrder.getCustomer().getId() : null;
+        Long deviceId = workOrder.getDevice() != null ? workOrder.getDevice().getId() : null;
+        if (customerId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Müşteri zorunludur");
+        }
+        if (deviceId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cihaz zorunludur");
+        }
+
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Müşteri bulunamadı: " + customerId));
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Cihaz bulunamadı: " + deviceId));
+
+        if (device.getCustomer() == null || device.getCustomer().getId() == null
+                || !device.getCustomer().getId().equals(customer.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Seçilen cihaz bu müşteriye ait değildir."
+            );
+        }
+
+        Technician technician = null;
+        if (workOrder.getTechnician() != null && workOrder.getTechnician().getId() != null) {
+            Long technicianId = workOrder.getTechnician().getId();
+            technician = technicianRepository.findById(technicianId)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "Teknisyen bulunamadı: " + technicianId));
+        }
+
+        Long regionId = workOrder.getRegionId();
+        if (regionId != null) {
+            if (!regionRepository.existsById(regionId)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Bölge bulunamadı: " + regionId);
+            }
+        }
+
+        WorkOrder toSave = new WorkOrder();
+        toSave.setCustomer(customer);
+        toSave.setDevice(device);
+        toSave.setTechnician(technician);
+        toSave.setCreatedBy(workOrder.getCreatedBy());
+        toSave.setRegionId(regionId);
+        toSave.setDescription(workOrder.getDescription());
+        toSave.setPriority(workOrder.getPriority());
+        toSave.setServiceType(workOrder.getServiceType());
+        toSave.setStatus(WorkOrderStatus.OPEN.name());
+
+        WorkOrder saved = workOrderRepository.save(toSave);
         saveHistory(saved, null, WorkOrderStatus.OPEN.name(), "İş emri oluşturuldu", "WEB");
 
-        // ---- BİLDİRİM GÖNDER (YENİ) ----
+        // WhatsApp bildirimi (remote taraf)
         String customerPhone = saved.getCustomer().getWhatsappNumber();
         if (customerPhone != null && !customerPhone.isEmpty()) {
             String message = String.format(
@@ -76,14 +144,12 @@ public class WorkOrderService {
                 System.out.println("✅ Bildirim gönderildi: " + customerPhone);
             } catch (Exception e) {
                 System.err.println("❌ Bildirim gönderilemedi: " + e.getMessage());
-                // İşlemi engelleme, sadece logla
             }
         }
 
         return saved;
     }
 
-    // === DURUM GÜNCELLEME (STATE MACHINE) ===
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
@@ -104,12 +170,12 @@ public class WorkOrderService {
         return updated;
     }
 
-    // === TEKNİSYEN ATAMA ===
     @Transactional
     public WorkOrder assignTechnician(Long workOrderId, Long technicianId, User changedBy) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
         Technician technician = technicianRepository.findById(technicianId)
-                .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + technicianId));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Teknisyen bulunamadı: " + technicianId));
 
         if (workOrder.getStatus().equals(WorkOrderStatus.CLOSED.name())) {
             throw new RuntimeException("Kapalı iş emrine teknisyen atanamaz");
@@ -128,7 +194,6 @@ public class WorkOrderService {
         return saved;
     }
 
-    // === DURUM GEÇİŞ KONTROLÜ (STATE MACHINE KURALLARI) ===
     private void validateTransition(String oldStatus, String newStatus) {
         switch (oldStatus) {
             case "OPEN" -> {
@@ -152,7 +217,6 @@ public class WorkOrderService {
         }
     }
 
-    // === DURUM GEÇMİŞİ KAYDETME ===
     private void saveHistory(WorkOrder workOrder, User changedBy, String newStatus, String description, String channel) {
         WorkOrderStatusHistory history = new WorkOrderStatusHistory();
         history.setWorkOrder(workOrder);
@@ -164,13 +228,11 @@ public class WorkOrderService {
         historyRepository.save(history);
     }
 
-    // === KANBAN (12. Gün) ===
     public Map<String, List<WorkOrder>> getKanbanGroupedByStatus() {
         List<WorkOrder> all = workOrderRepository.findAll();
         return all.stream().collect(Collectors.groupingBy(WorkOrder::getStatus));
     }
 
-    // === DURUM GEÇMİŞİ (13. Gün) ===
     public List<WorkOrderStatusHistory> getStatusHistory(Long workOrderId) {
         return historyRepository.findByWorkOrderIdOrderByCreatedAtDesc(workOrderId);
     }

@@ -11,9 +11,11 @@ import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.UserRepository;
 import com.servis.backend.security.RoleNames;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -44,7 +46,6 @@ public class TechnicianService {
                 .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + id));
     }
 
-    // WhatsApp numarasına göre teknisyen bul (17. gün bot için)
     public Technician findByWhatsappNumber(String whatsappNumber) {
         return technicianRepository.findByWhatsappNumber(whatsappNumber)
                 .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + whatsappNumber));
@@ -56,21 +57,30 @@ public class TechnicianService {
     @Transactional
     public Technician createTechnician(CreateTechnicianRequest request) {
         if (request.getFullName() == null || request.getFullName().isBlank()) {
-            throw new RuntimeException("Ad soyad zorunludur");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ad soyad zorunludur");
         }
         if (request.getEmail() == null || request.getEmail().isBlank()) {
-            throw new RuntimeException("E-posta zorunludur");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-posta zorunludur");
         }
         if (request.getPassword() == null || request.getPassword().isBlank()) {
-            throw new RuntimeException("Şifre zorunludur");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Şifre zorunludur");
         }
         if (request.getPassword().length() < 6) {
-            throw new RuntimeException("Şifre en az 6 karakter olmalıdır");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Şifre en az 6 karakter olmalıdır");
+        }
+        if (request.getRegionId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bölge zorunludur");
+        }
+        if (request.getWhatsappNumber() == null || request.getWhatsappNumber().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "WhatsApp numarası zorunludur");
         }
 
         String email = request.getEmail().trim();
         if (userRepository.findByEmail(email).isPresent()) {
-            throw new RuntimeException("Bu e-posta ile kullanıcı zaten kayıtlı: " + email);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Bu e-posta ile kullanıcı zaten kayıtlı: " + email
+            );
         }
 
         Role technicianRole = resolveRole("TECHNICIAN");
@@ -84,21 +94,22 @@ public class TechnicianService {
         user.setRole(technicianRole);
         User savedUser = userRepository.save(user);
 
+        Region region = regionRepository.findById(request.getRegionId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Bölge bulunamadı: " + request.getRegionId()
+                ));
+
         Technician technician = new Technician();
         technician.setUser(savedUser);
-        technician.setWhatsappNumber(blankToNull(request.getWhatsappNumber()));
+        technician.setRegion(region);
+        technician.setWhatsappNumber(request.getWhatsappNumber().trim());
         technician.setCurrentWorkload(
                 request.getCurrentWorkload() != null ? request.getCurrentWorkload() : 0
         );
         technician.setIsAvailable(
                 request.getIsAvailable() != null ? request.getIsAvailable() : true
         );
-
-        if (request.getRegionId() != null) {
-            Region region = regionRepository.findById(request.getRegionId())
-                    .orElseThrow(() -> new RuntimeException("Bölge bulunamadı: " + request.getRegionId()));
-            technician.setRegion(region);
-        }
 
         return technicianRepository.save(technician);
     }
@@ -122,26 +133,16 @@ public class TechnicianService {
         technicianRepository.deleteById(id);
     }
 
-    /**
-     * Müsait ve iş yükü maksimum değerden düşük olan teknisyenleri getir.
-     * Örneğin maxWorkload=5, 5'ten az iş yükü olanları getirir.
-     */
     public List<Technician> getAvailableTechniciansWithMaxWorkload(Integer maxWorkload) {
         return technicianRepository.findByIsAvailableTrueAndCurrentWorkloadLessThan(maxWorkload);
     }
 
-    /**
-     * Teknisyenin iş yükünü 1 artır (atama yapıldığında).
-     */
     public Technician incrementWorkload(Long technicianId) {
         Technician tech = getTechnicianById(technicianId);
         tech.setCurrentWorkload(tech.getCurrentWorkload() + 1);
         return technicianRepository.save(tech);
     }
 
-    /**
-     * Teknisyenin iş yükünü 1 azalt (iş emri kapandığında).
-     */
     public Technician decrementWorkload(Long technicianId) {
         Technician tech = getTechnicianById(technicianId);
         if (tech.getCurrentWorkload() > 0) {

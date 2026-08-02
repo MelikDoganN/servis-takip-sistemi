@@ -1,6 +1,9 @@
 package com.servis.backend.service;
 
 import com.servis.backend.entity.*;
+import com.servis.backend.repository.CustomerRepository;
+import com.servis.backend.repository.DeviceRepository;
+import com.servis.backend.repository.RegionRepository;
 import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.WorkOrderRepository;
 import com.servis.backend.repository.WorkOrderStatusHistoryRepository;
@@ -10,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
 
@@ -29,17 +33,47 @@ class WorkOrderServiceTest {
     @Mock
     private TechnicianRepository technicianRepository;
 
+    @Mock
+    private CustomerRepository customerRepository;
+
+    @Mock
+    private DeviceRepository deviceRepository;
+
+    @Mock
+    private RegionRepository regionRepository;
+
     @InjectMocks
     private WorkOrderService workOrderService;
 
     private WorkOrder workOrder;
     private Technician technician;
+    private Customer customer;
+    private Device device;
+    private User createdBy;
 
     @BeforeEach
     void setUp() {
+        createdBy = new User();
+        createdBy.setId(99L);
+
+        customer = new Customer();
+        customer.setId(1L);
+        customer.setFullName("Müşteri");
+
+        device = new Device();
+        device.setId(10L);
+        device.setCustomer(customer);
+        device.setSerialNumber("SN-1");
+
         workOrder = new WorkOrder();
         workOrder.setId(1L);
         workOrder.setStatus("OPEN");
+        workOrder.setCustomer(customer);
+        workOrder.setDevice(device);
+        workOrder.setCreatedBy(createdBy);
+        workOrder.setDescription("Arıza");
+        workOrder.setPriority("MEDIUM");
+        workOrder.setServiceType("PAID");
 
         technician = new Technician();
         technician.setId(1L);
@@ -48,10 +82,42 @@ class WorkOrderServiceTest {
 
     @Test
     void createWorkOrder_ShouldSetStatusOpen() {
-        when(workOrderRepository.save(any(WorkOrder.class))).thenReturn(workOrder);
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer));
+        when(deviceRepository.findById(10L)).thenReturn(Optional.of(device));
+        when(workOrderRepository.save(any(WorkOrder.class))).thenAnswer(inv -> {
+            WorkOrder wo = inv.getArgument(0);
+            wo.setId(1L);
+            return wo;
+        });
 
         WorkOrder created = workOrderService.createWorkOrder(workOrder);
         assertEquals("OPEN", created.getStatus());
+        assertEquals(customer, created.getCustomer());
+        assertEquals(device, created.getDevice());
+    }
+
+    @Test
+    void createWorkOrder_DeviceNotOwnedByCustomer_ThrowsBadRequest() {
+        Customer other = new Customer();
+        other.setId(2L);
+        device.setCustomer(other);
+
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer));
+        when(deviceRepository.findById(10L)).thenReturn(Optional.of(device));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> workOrderService.createWorkOrder(workOrder));
+        assertEquals(400, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("ait değildir"));
+    }
+
+    @Test
+    void createWorkOrder_MissingCustomer_ThrowsNotFound() {
+        when(customerRepository.findById(1L)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> workOrderService.createWorkOrder(workOrder));
+        assertEquals(404, ex.getStatusCode().value());
     }
 
     @Test
@@ -100,7 +166,6 @@ class WorkOrderServiceTest {
 
         WorkOrder updated = workOrderService.assignTechnician(1L, 1L, null);
         assertEquals("ASSIGNED", updated.getStatus());
-        // Technician workload updated in service method (should be 3 now)
         assertEquals(3, technician.getCurrentWorkload());
     }
 }

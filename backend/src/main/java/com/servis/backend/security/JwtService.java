@@ -7,8 +7,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -50,8 +52,14 @@ public class JwtService {
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
 
+    /** Geriye dönük uyumluluk — roller claim'siz token. */
     public String generateToken(String username) {
+        return generateToken(username, List.of());
+    }
+
+    public String generateToken(String username, Collection<String> roles) {
         Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", roles == null ? List.of() : List.copyOf(roles));
         return createToken(claims, username);
     }
 

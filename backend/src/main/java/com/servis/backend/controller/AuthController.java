@@ -5,15 +5,20 @@ import com.servis.backend.entity.User;
 import com.servis.backend.repository.RoleRepository;
 import com.servis.backend.repository.UserRepository;
 import com.servis.backend.security.JwtService;
+import com.servis.backend.security.RoleNames;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -45,17 +50,31 @@ public class AuthController {
         );
 
         if (authentication.isAuthenticated()) {
-            String token = jwtService.generateToken(email);
+            List<String> roles = authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .toList();
+            String token = jwtService.generateToken(email, roles);
             return ResponseEntity.ok(Map.of("token", token));
         } else {
             throw new UsernameNotFoundException("Geçersiz giriş bilgileri");
         }
     }
 
+    /**
+     * Public kayıt: yalnızca sistemde hiç kullanıcı yokken ilk ADMIN (bootstrap) oluşturur.
+     * Sonraki kayıtlar kullanıcı yönetimi üzerinden yapılır.
+     */
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> userData) {
-        // Rolü bul yoksa oluştur
-        Role role = roleRepository.findByName("ADMIN")
+        if (userRepository.count() > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Kayıt kapalı. Yeni kullanıcıları yönetici panelinden ekleyin."
+            );
+        }
+
+        Role role = roleRepository.findByName(RoleNames.toDbName("ADMIN"))
+                .or(() -> roleRepository.findByName("ADMIN"))
                 .orElseGet(() -> {
                     Role newRole = new Role();
                     newRole.setName("ADMIN");
@@ -73,6 +92,6 @@ public class AuthController {
         user.setRole(role);
 
         User saved = userRepository.save(user);
-        return ResponseEntity.ok(Map.of("message", "Kullanıcı kaydedildi", "id", saved.getId()));
+        return ResponseEntity.ok(Map.of("message", "İlk yönetici hesabı oluşturuldu", "id", saved.getId()));
     }
 }

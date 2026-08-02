@@ -1,5 +1,8 @@
 package com.servis.backend.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
 /**
  * Yeni teknisyen oluşturma isteği.
  * Admin ad/e-posta/şifre gönderir; backend User (TECHNICIAN) + Technician oluşturur.
@@ -10,8 +13,13 @@ public class CreateTechnicianRequest {
     private String email;
     private String password;
     private String phone;
+
+    @NotBlank(message = "WhatsApp numarası zorunludur")
     private String whatsappNumber;
+
+    @NotNull(message = "Bölge zorunludur")
     private Long regionId;
+
     private Integer currentWorkload;
     private Boolean isAvailable;
 
