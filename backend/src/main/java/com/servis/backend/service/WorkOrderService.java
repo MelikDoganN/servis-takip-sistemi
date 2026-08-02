@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +27,9 @@ public class WorkOrderService {
 
     @Autowired
     private TechnicianRepository technicianRepository;
+
+    @Autowired
+    private RestTemplate restTemplate;  // <-- EKLENDİ
 
     // === LİSTELEME (Sayfalama Destekli) ===
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
@@ -57,6 +61,25 @@ public class WorkOrderService {
         workOrder.setStatus(WorkOrderStatus.OPEN.name());
         WorkOrder saved = workOrderRepository.save(workOrder);
         saveHistory(saved, null, WorkOrderStatus.OPEN.name(), "İş emri oluşturuldu", "WEB");
+
+        // ---- BİLDİRİM GÖNDER (YENİ) ----
+        String customerPhone = saved.getCustomer().getWhatsappNumber();
+        if (customerPhone != null && !customerPhone.isEmpty()) {
+            String message = String.format(
+                    "Arıza kaydınız alındı. İş emri numaranız: %d\nDurumunuzu öğrenmek için: !durum %d\nGaranti sorgulamak için: !garanti %s",
+                    saved.getId(), saved.getId(), saved.getDevice().getSerialNumber()
+            );
+            try {
+                String botUrl = "http://localhost:8000/send-notification";
+                Map<String, String> payload = Map.of("phone", customerPhone, "message", message);
+                restTemplate.postForEntity(botUrl, payload, String.class);
+                System.out.println("✅ Bildirim gönderildi: " + customerPhone);
+            } catch (Exception e) {
+                System.err.println("❌ Bildirim gönderilemedi: " + e.getMessage());
+                // İşlemi engelleme, sadece logla
+            }
+        }
+
         return saved;
     }
 

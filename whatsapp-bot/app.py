@@ -325,6 +325,21 @@ async def webhook(request: Request):
         print(f"❌ Webhook hatası: {e}")
         return JSONResponse(content={"status": "error"}, status_code=500)
 
+# ---- BİLDİRİM ALMA ENDPOINT'İ (Backend'den istek alır) ----
+@app.post("/send-notification")
+async def send_notification(request: Request):
+    try:
+        data = await request.json()
+        phone = data.get("phone")
+        message = data.get("message")
+        if not phone or not message:
+            return JSONResponse(content={"status": "missing fields"}, status_code=400)
+        success = await send_whatsapp_message(phone, message)
+        return JSONResponse(content={"status": "sent" if success else "failed"}, status_code=200)
+    except Exception as e:
+        print(f"❌ Bildirim hatası: {e}")
+        return JSONResponse(content={"status": "error"}, status_code=500)
+
 @app.get("/")
 def root():
     return {"message": "Servis Takip WhatsApp Botu Çalışıyor!"}
