@@ -153,6 +153,7 @@ class WorkOrderRelationApiTest {
                         .content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("OPEN"))
+                .andExpect(jsonPath("$.serviceNumber").exists())
                 .andExpect(jsonPath("$.customer.id").value(customerA.getId().intValue()))
                 .andExpect(jsonPath("$.device.id").value(deviceOfA.getId().intValue()));
     }

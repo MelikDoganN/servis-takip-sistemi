@@ -21,6 +21,10 @@ public class WorkOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Müşteriye gösterilen sabit servis referansı (örn. SRV-2026-000017). */
+    @Column(name = "service_number", length = 32, nullable = false, unique = true)
+    private String serviceNumber;
+
     @ManyToOne
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;

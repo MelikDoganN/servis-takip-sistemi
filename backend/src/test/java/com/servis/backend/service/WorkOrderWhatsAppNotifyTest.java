@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -96,11 +97,17 @@ class WorkOrderWhatsAppNotifyTest {
         when(workOrderRepository.save(any(WorkOrder.class))).thenAnswer(inv -> {
             WorkOrder wo = inv.getArgument(0);
             wo.setId(42L);
+            if (wo.getServiceNumber() == null) {
+                wo.setServiceNumber("SRV-2026-000042");
+            }
             return wo;
         });
+        when(workOrderRepository.nextServiceNumberSequence()).thenReturn(42L);
+        when(workOrderRepository.existsByServiceNumber(any())).thenReturn(false);
 
         WorkOrder created = workOrderService.createWorkOrder(workOrder);
         assertEquals("OPEN", created.getStatus());
+        assertTrue(created.getServiceNumber().matches("SRV-\\d{4}-000042"));
 
         ArgumentCaptor<WhatsAppNotificationRequest> captor =
                 ArgumentCaptor.forClass(WhatsAppNotificationRequest.class);
@@ -108,6 +115,8 @@ class WorkOrderWhatsAppNotifyTest {
         assertEquals(WhatsAppNotificationRequest.EVENT_WORK_ORDER_CREATED, captor.getValue().getEventType());
         assertEquals(42L, captor.getValue().getWorkOrderId());
         assertEquals("905551112233", captor.getValue().getPhone());
+        assertTrue(captor.getValue().getMessage().contains("Servis No:"));
+        assertTrue(captor.getValue().getMessage().contains("000042"));
     }
 
     @Test
@@ -121,6 +130,8 @@ class WorkOrderWhatsAppNotifyTest {
             wo.setId(43L);
             return wo;
         });
+        when(workOrderRepository.nextServiceNumberSequence()).thenReturn(43L);
+        when(workOrderRepository.existsByServiceNumber(any())).thenReturn(false);
 
         workOrderService.createWorkOrder(workOrder);
 
@@ -141,6 +152,8 @@ class WorkOrderWhatsAppNotifyTest {
             wo.setId(44L);
             return wo;
         });
+        when(workOrderRepository.nextServiceNumberSequence()).thenReturn(44L);
+        when(workOrderRepository.existsByServiceNumber(any())).thenReturn(false);
 
         workOrderService.createWorkOrder(workOrder);
         verify(whatsAppNotificationClient, never()).sendNotification(any(WhatsAppNotificationRequest.class));
@@ -150,6 +163,7 @@ class WorkOrderWhatsAppNotifyTest {
     void assignTechnician_NewTech_SendsAssignNotification() {
         WorkOrder existing = new WorkOrder();
         existing.setId(50L);
+        existing.setServiceNumber("SRV-2026-000050");
         existing.setStatus("OPEN");
         existing.setCustomer(customer);
         existing.setDevice(device);
@@ -165,6 +179,8 @@ class WorkOrderWhatsAppNotifyTest {
         verify(whatsAppNotificationClient).sendNotification(captor.capture());
         assertEquals(WhatsAppNotificationRequest.EVENT_TECHNICIAN_ASSIGNED, captor.getValue().getEventType());
         assertEquals("Ali Teknisyen", captor.getValue().getTechnicianName());
+        assertTrue(captor.getValue().getMessage().contains("SRV-2026-000050"));
+        assertTrue(captor.getValue().getMessage().contains("Ali Teknisyen"));
     }
 
     @Test
@@ -187,6 +203,7 @@ class WorkOrderWhatsAppNotifyTest {
     void updateStatus_Changed_SendsTurkishMessage() {
         WorkOrder existing = new WorkOrder();
         existing.setId(52L);
+        existing.setServiceNumber("SRV-2026-000052");
         existing.setStatus("ASSIGNED");
         existing.setCustomer(customer);
         existing.setDevice(device);
@@ -200,7 +217,8 @@ class WorkOrderWhatsAppNotifyTest {
                 ArgumentCaptor.forClass(WhatsAppNotificationRequest.class);
         verify(whatsAppNotificationClient).sendNotification(captor.capture());
         assertEquals(WhatsAppNotificationRequest.EVENT_STATUS_CHANGED, captor.getValue().getEventType());
-        assertEquals("Cihazınız için parça bekleniyor.", captor.getValue().getMessage());
+        assertTrue(captor.getValue().getMessage().contains("SRV-2026-000052"));
+        assertTrue(captor.getValue().getMessage().contains("Parça Bekliyor"));
         assertEquals("WAITING_PARTS", captor.getValue().getTargetStatus());
     }
 
@@ -246,10 +264,31 @@ class WorkOrderWhatsAppNotifyTest {
 
     @Test
     void statusChangeMessage_MapsKnownStatuses() {
-        assertEquals("Servis kaydınız açıldı.", WorkOrderService.statusChangeMessage("OPEN"));
-        assertEquals("Servis kaydınıza teknisyen atandı.", WorkOrderService.statusChangeMessage("ASSIGNED"));
-        assertEquals("Cihazınızın inceleme ve onarım süreci başladı.",
-                WorkOrderService.statusChangeMessage("IN_PROGRESS"));
-        assertEquals("Servis kaydınız iptal edildi.", WorkOrderService.statusChangeMessage("CANCELLED"));
+        String open = WorkOrderService.statusChangeMessage("SRV-2026-000001", "OPEN");
+        assertTrue(open.contains("SRV-2026-000001"));
+        assertTrue(open.contains("Açık"));
+        String assigned = WorkOrderService.statusChangeMessage("SRV-2026-000001", "ASSIGNED");
+        assertTrue(assigned.contains("Teknisyen Atandı"));
+        String inProgress = WorkOrderService.statusChangeMessage("SRV-2026-000001", "IN_PROGRESS");
+        assertTrue(inProgress.contains("İşlemde"));
+        String cancelled = WorkOrderService.statusChangeMessage("SRV-2026-000001", "CANCELLED");
+        assertTrue(cancelled.contains("İptal Edildi"));
+    }
+
+    @Test
+    void getWorkOrderByServiceNumber_NotFound() {
+        when(workOrderRepository.findByServiceNumber("SRV-2026-000099")).thenReturn(Optional.empty());
+        assertThrows(ResponseStatusException.class,
+                () -> workOrderService.getWorkOrderByServiceNumber("SRV-2026-000099"));
+    }
+
+    @Test
+    void getWorkOrderByServiceNumber_Found() {
+        WorkOrder existing = new WorkOrder();
+        existing.setId(99L);
+        existing.setServiceNumber("SRV-2026-000099");
+        when(workOrderRepository.findByServiceNumber("SRV-2026-000099")).thenReturn(Optional.of(existing));
+        WorkOrder found = workOrderService.getWorkOrderByServiceNumber("srv-2026-000099");
+        assertEquals(99L, found.getId());
     }
 }

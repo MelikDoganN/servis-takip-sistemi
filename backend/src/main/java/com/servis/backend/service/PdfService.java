@@ -41,10 +41,13 @@ public class PdfService {
         // TÜRKÇE KARAKTER DESTEĞİ (En garanti yöntem)
         PdfFont font = PdfFontFactory.createFont("Helvetica", "Cp1254"); // Türkçe karakter desteği
 
-        document.add(new Paragraph("İŞ EMRİ DETAYLARI").setFont(font).setFontSize(18));
+        document.add(new Paragraph("SERVİS KAYDI "
+                + (workOrder.getServiceNumber() != null ? workOrder.getServiceNumber() : "")).setFont(font).setFontSize(18));
         document.add(new Paragraph(" "));
 
-        document.add(new Paragraph("ID: " + workOrder.getId()).setFont(font));
+        if (workOrder.getServiceNumber() != null) {
+            document.add(new Paragraph("Servis No: " + workOrder.getServiceNumber()).setFont(font));
+        }
         document.add(new Paragraph("Müşteri: " + workOrder.getCustomer().getFullName()).setFont(font));
         document.add(new Paragraph("Cihaz Seri No: " + workOrder.getDevice().getSerialNumber()).setFont(font));
         document.add(new Paragraph("Açıklama: " + workOrder.getDescription()).setFont(font));

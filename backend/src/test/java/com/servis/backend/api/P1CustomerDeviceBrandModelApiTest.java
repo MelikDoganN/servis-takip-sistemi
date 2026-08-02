@@ -219,6 +219,7 @@ class P1CustomerDeviceBrandModelApiTest {
         wo.setStatus("OPEN");
         wo.setPriority("MEDIUM");
         wo.setServiceType("PAID");
+        wo.setServiceNumber("SRV-2026-009991");
         workOrderRepository.save(wo);
 
         mockMvc.perform(delete("/api/devices/" + device.getId()))

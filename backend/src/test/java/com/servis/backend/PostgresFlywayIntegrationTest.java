@@ -85,7 +85,7 @@ class PostgresFlywayIntegrationTest {
                 "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
         );
 
-        assertTrue(history.size() >= 7, "Expected at least V1-V7 migrations, got: " + history.size());
+        assertTrue(history.size() >= 8, "Expected at least V1-V8 migrations, got: " + history.size());
 
         Integer roles = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertEquals(5, roles);
@@ -103,6 +103,13 @@ class PostgresFlywayIntegrationTest {
                         + "WHERE table_schema = 'public' AND table_name = 'work_order_attachments'",
                 Integer.class);
         assertEquals(1, tables);
+
+        Integer serviceNumberCol = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' AND table_name = 'work_orders' "
+                        + "AND column_name = 'service_number'",
+                Integer.class);
+        assertEquals(1, serviceNumberCol);
     }
 
     @Test

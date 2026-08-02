@@ -123,12 +123,15 @@ public class NotificationService {
     public void notifyWorkOrderCreated(WorkOrder workOrder) {
         try {
             Long woId = workOrder.getId();
+            String serviceNo = workOrder.getServiceNumber() != null
+                    ? workOrder.getServiceNumber()
+                    : String.valueOf(woId);
             for (Long userId : resolveRecipients(workOrder, true)) {
                 createInAppSafely(
                         userId,
                         TYPE_WORK_ORDER_CREATED,
                         "Yeni iş emri",
-                        "Yeni servis kaydı oluşturuldu. İş emri no: " + woId + ".",
+                        "Yeni servis kaydı oluşturuldu. Servis No: " + serviceNo + ".",
                         "WORK_ORDER",
                         woId,
                         "created"
@@ -142,6 +145,9 @@ public class NotificationService {
     public void notifyTechnicianAssigned(WorkOrder workOrder, String technicianName) {
         try {
             Long woId = workOrder.getId();
+            String serviceNo = workOrder.getServiceNumber() != null
+                    ? workOrder.getServiceNumber()
+                    : String.valueOf(woId);
             String name = technicianName != null && !technicianName.isBlank() ? technicianName : "teknisyen";
             String eventKey = "tech:" + (workOrder.getTechnician() != null ? workOrder.getTechnician().getId() : "x");
             for (Long userId : resolveRecipients(workOrder, true)) {
@@ -149,7 +155,7 @@ public class NotificationService {
                         userId,
                         TYPE_TECHNICIAN_ASSIGNED,
                         "Teknisyen atandı",
-                        "İş emri " + woId + " için teknisyen atandı: " + name + ".",
+                        serviceNo + " numaralı servis kaydına teknisyen atandı: " + name + ".",
                         "WORK_ORDER",
                         woId,
                         eventKey
@@ -163,8 +169,11 @@ public class NotificationService {
     public void notifyStatusChanged(WorkOrder workOrder, String newStatus) {
         try {
             Long woId = workOrder.getId();
+            String serviceNo = workOrder.getServiceNumber() != null
+                    ? workOrder.getServiceNumber()
+                    : String.valueOf(woId);
             String title = statusTitle(newStatus);
-            String message = statusMessage(woId, newStatus);
+            String message = statusMessage(serviceNo, newStatus);
             if (message == null) {
                 return;
             }
@@ -217,19 +226,20 @@ public class NotificationService {
         };
     }
 
-    private static String statusMessage(Long woId, String status) {
+    private static String statusMessage(String serviceNo, String status) {
         if (status == null) {
             return null;
         }
+        String sn = serviceNo != null ? serviceNo : "?";
         return switch (status) {
-            case "OPEN" -> "İş emri " + woId + " açıldı.";
-            case "ASSIGNED" -> "İş emri " + woId + " için teknisyen atandı.";
-            case "IN_PROGRESS" -> "İş emri " + woId + " inceleme/onarım sürecine alındı.";
-            case "WAITING_PARTS" -> "İş emri " + woId + " için parça bekleniyor.";
-            case "RESOLVED" -> "İş emri " + woId + " çözüldü.";
-            case "CLOSED" -> "İş emri " + woId + " kapatıldı.";
-            case "CANCELLED" -> "İş emri " + woId + " iptal edildi.";
-            default -> "İş emri " + woId + " durumu güncellendi: " + status + ".";
+            case "OPEN" -> sn + " numaralı servis kaydı açıldı.";
+            case "ASSIGNED" -> sn + " numaralı servis kaydına teknisyen atandı.";
+            case "IN_PROGRESS" -> sn + " numaralı servis kaydı İşlemde olarak güncellendi.";
+            case "WAITING_PARTS" -> sn + " numaralı servis kaydı için parça bekleniyor.";
+            case "RESOLVED" -> sn + " numaralı servis kaydı çözüldü.";
+            case "CLOSED" -> sn + " numaralı servis kaydı kapatıldı.";
+            case "CANCELLED" -> sn + " numaralı servis kaydı iptal edildi.";
+            default -> sn + " numaralı servis kaydının durumu güncellendi: " + status + ".";
         };
     }
 

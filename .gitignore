@@ -27,9 +27,3 @@ replay_pid*
 frontend/node_modules/
 frontend/.next/
 frontend/.env.local
-whatsapp-bot/__pycache__/
-whatsapp-bot/.env
-whatsapp-bot/.venv/
-whatsapp-bot/venv/
-frontend/
-frontend_yedek/

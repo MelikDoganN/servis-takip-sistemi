@@ -87,6 +87,27 @@ public class WorkOrderController {
         return workOrderService.getAllWorkOrders(pageable);
     }
 
+    @GetMapping("/by-service-number/{serviceNumber}")
+    public ResponseEntity<?> getByServiceNumber(
+            @PathVariable String serviceNumber,
+            @RequestParam(required = false) String phone) {
+
+        WorkOrder workOrder = workOrderService.getWorkOrderByServiceNumber(serviceNumber);
+
+        if (phone != null && !phone.isEmpty()) {
+            String whatsapp = workOrder.getCustomer().getWhatsappNumber();
+            String customerPhone = workOrder.getCustomer().getPhone();
+            boolean owns = PhoneNormalizer.matches(phone, whatsapp)
+                    || PhoneNormalizer.matches(phone, customerPhone);
+            if (!owns) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Servis kaydı bulunamadı."));
+            }
+        }
+
+        return ResponseEntity.ok(workOrder);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(
             @PathVariable Long id,

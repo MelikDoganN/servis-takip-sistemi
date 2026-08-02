@@ -117,3 +117,48 @@ def test_button_ids_map_to_commands():
         elif button_id == "btn_yardim":
             text = "!yardim"
         assert text == expected
+
+
+def test_parse_status_command_variants():
+    cases = [
+        ("17", "17", False),
+        ("durum 17", "17", False),
+        ("!durum 17", "17", False),
+        ("durum [17]", "17", False),
+        ("!durum [17]", "17", False),
+        ("SRV-2026-000017", "SRV-2026-000017", False),
+        ("durum SRV-2026-000017", "SRV-2026-000017", False),
+        ("!durum SRV-2026-000017", "SRV-2026-000017", False),
+        ("!durum", None, True),
+        ("durum", None, True),
+    ]
+    for text, expected_ref, expected_list in cases:
+        ref, list_only = app_module.parse_status_command(text)
+        assert ref == expected_ref, text
+        assert list_only is expected_list, text
+
+
+def test_format_work_order_detail_turkish_and_defaults():
+    text = app_module.format_work_order_detail(
+        {
+            "serviceNumber": "SRV-2026-000017",
+            "status": "ASSIGNED",
+            "description": ".",
+            "device": {
+                "model": {"brand": {"name": "Lenovo"}, "name": "ThinkPad"},
+            },
+            "technician": {"user": {"fullName": "Miraç"}},
+        }
+    )
+    assert "SRV-2026-000017" in text
+    assert "Teknisyen Atandı" in text
+    assert "Lenovo ThinkPad" in text
+    assert "Belirtilmemiş" in text
+    assert "Miraç" in text
+    assert "HTTP" not in text
+
+
+def test_friendly_not_found_has_no_http():
+    msg = app_module.friendly_not_found_message()
+    assert "HTTP" not in msg
+    assert "SRV-" in msg

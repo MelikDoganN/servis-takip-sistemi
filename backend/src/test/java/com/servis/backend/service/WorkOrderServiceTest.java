@@ -90,6 +90,8 @@ class WorkOrderServiceTest {
     void createWorkOrder_ShouldSetStatusOpen() {
         when(customerRepository.findById(1L)).thenReturn(Optional.of(customer));
         when(deviceRepository.findById(10L)).thenReturn(Optional.of(device));
+        when(workOrderRepository.nextServiceNumberSequence()).thenReturn(17L);
+        when(workOrderRepository.existsByServiceNumber(any())).thenReturn(false);
         when(workOrderRepository.save(any(WorkOrder.class))).thenAnswer(inv -> {
             WorkOrder wo = inv.getArgument(0);
             wo.setId(1L);
@@ -100,6 +102,8 @@ class WorkOrderServiceTest {
         assertEquals("OPEN", created.getStatus());
         assertEquals(customer, created.getCustomer());
         assertEquals(device, created.getDevice());
+        assertNotNull(created.getServiceNumber());
+        assertTrue(created.getServiceNumber().matches("SRV-\\d{4}-000017"));
     }
 
     @Test
