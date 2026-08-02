@@ -109,7 +109,7 @@ CREATE TABLE work_orders (
     device_id BIGINT NOT NULL,
     technician_id BIGINT,
     created_by_user_id BIGINT NOT NULL,
-    region_id BIGINT,
+    region_id BIGINT NOT NULL,
     description TEXT NOT NULL,
     status VARCHAR(30) NOT NULL,
     priority VARCHAR(20) NOT NULL,

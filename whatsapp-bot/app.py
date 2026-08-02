@@ -48,14 +48,13 @@ async def get_user_role(phone: str):
         )
         if resp.status_code == 200:
             return "TECHNICIAN"
-        # Sonra müşteri kontrolü (customers tablosunda ara)
+        # Sonra müşteri kontrolü
         resp = await client.get(
             f"{BACKEND_URL}/api/customers/by-whatsapp/{phone}",
             headers=headers
         )
         if resp.status_code == 200:
             return "CUSTOMER"
-        # Hiçbir yerde yoksa
         return "UNREGISTERED"
 
 async def send_whatsapp_message(to_number: str, message: str) -> bool:
@@ -75,6 +74,7 @@ async def send_whatsapp_message(to_number: str, message: str) -> bool:
         return False
 
 async def send_interactive_buttons(to_number: str, body_text: str, buttons: list) -> bool:
+    """WhatsApp butonlu mesaj gönderir (max 3 buton)."""
     url = f"https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}", "Content-Type": "application/json"}
     data = {
@@ -153,14 +153,6 @@ async def webhook(request: Request):
         if not text:
             return JSONResponse(content={"status": "ignored"}, status_code=200)
 
-        # ---- ÖNCE ROL KONTROLÜ (EN BAŞTA) ----
-        role = await get_user_role(phone)
-        if role == "UNREGISTERED":
-            response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
-            await send_whatsapp_message(phone, response_text)
-            return JSONResponse(content={"status": "received", "reply": response_text}, status_code=200)
-
-        # ---- KAYITLI KULLANICI İÇİN KOMUT İŞLEME ----
         try:
             token = get_token()
         except Exception as e:
@@ -170,28 +162,31 @@ async def webhook(request: Request):
         headers = {"Authorization": f"Bearer {token}"}
         response_text = ""
 
-        # --- KOMUT İŞLEME ---
+        # --- !yardim ---
         if text.startswith("!yardim"):
-            if role == "TECHNICIAN":
-                buttons = [
-                    {"type": "reply", "reply": {"id": "btn_islist", "title": "📋 İş Emirlerim"}},
-                    {"type": "reply", "reply": {"id": "btn_guncelle", "title": "🔄 Durum Güncelle"}},
-                    {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
-                ]
-                body_text = "👋 Hoş geldiniz! Teknisyen ve Müşteri işlemlerinizi buradan yapabilirsiniz:"
+            role = await get_user_role(phone)
+            if role == "UNREGISTERED":
+                response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
             else:
-                buttons = [
-                    {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
-                ]
-                body_text = "👋 Hoş geldiniz Müşteri! Yapmak istediğiniz işlemi seçin:"
+                if role == "TECHNICIAN":
+                    buttons = [
+                        {"type": "reply", "reply": {"id": "btn_islist", "title": "📋 İş Emirlerim"}},
+                        {"type": "reply", "reply": {"id": "btn_guncelle", "title": "🔄 Durum Güncelle"}},
+                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
+                    ]
+                    body_text = "👋 Hoş geldiniz Teknisyen! Yapmak istediğiniz işlemi seçin:"
+                else:
+                    buttons = [
+                        {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
+                        {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
+                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
+                    ]
+                    body_text = "👋 Hoş geldiniz Müşteri! Yapmak istediğiniz işlemi seçin:"
 
-            await send_interactive_buttons(phone, body_text, buttons)
-            response_text = "Menü gönderildi."
+                await send_interactive_buttons(phone, body_text, buttons)
+                response_text = "Menü gönderildi."
 
+        # --- !isliste ---
         elif text.startswith("!isliste"):
             with httpx.Client() as client:
                 try:
@@ -213,6 +208,7 @@ async def webhook(request: Request):
                 except Exception as e:
                     response_text = f"❗ Bağlantı hatası: {e}"
 
+        # --- !guncelle ---
         elif text.startswith("!guncelle"):
             parts = text.split()
             if len(parts) >= 3:
@@ -234,6 +230,7 @@ async def webhook(request: Request):
             else:
                 response_text = "❗ Yanlış format. Kullanım: !guncelle [ID] [DURUM]"
 
+        # --- !garanti ---
         elif text.startswith("!garanti"):
             parts = text.split()
             if len(parts) >= 2:
@@ -264,6 +261,7 @@ async def webhook(request: Request):
             else:
                 response_text = "❗ Kullanım: !garanti [SERI_NO]"
 
+        # --- !durum ---
         elif text.startswith("!durum"):
             parts = text.split()
             if len(parts) >= 2:
@@ -293,29 +291,31 @@ async def webhook(request: Request):
             else:
                 response_text = "❗ Kullanım: !durum [IS_EMRI_ID]"
 
+        # --- Komut değilse ---
         else:
-            # Komut değilse, menü gönder
-            if role == "TECHNICIAN":
-                buttons = [
-                    {"type": "reply", "reply": {"id": "btn_islist", "title": "📋 İş Emirlerim"}},
-                    {"type": "reply", "reply": {"id": "btn_guncelle", "title": "🔄 Durum Güncelle"}},
-                    {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
-                ]
-                body_text = "👋 Hoş geldiniz! Teknisyen ve Müşteri işlemlerinizi buradan yapabilirsiniz:"
+            role = await get_user_role(phone)
+            if role == "UNREGISTERED":
+                response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
             else:
-                buttons = [
-                    {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
-                    {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
-                ]
-                body_text = "👋 Hoş geldiniz Müşteri! Yapmak istediğiniz işlemi seçin:"
+                if role == "TECHNICIAN":
+                    buttons = [
+                        {"type": "reply", "reply": {"id": "btn_islist", "title": "📋 İş Emirlerim"}},
+                        {"type": "reply", "reply": {"id": "btn_guncelle", "title": "🔄 Durum Güncelle"}},
+                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
+                    ]
+                    body_text = "👋 Hoş geldiniz Teknisyen! Yapmak istediğiniz işlemi seçin:"
+                else:
+                    buttons = [
+                        {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
+                        {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
+                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}}
+                    ]
+                    body_text = "👋 Hoş geldiniz Müşteri! Yapmak istediğiniz işlemi seçin:"
 
-            await send_interactive_buttons(phone, body_text, buttons)
-            response_text = "Menü gönderildi."
+                await send_interactive_buttons(phone, body_text, buttons)
+                response_text = "Menü gönderildi."
 
-        # Cevap metnini gönder (sadece komutlardan sonra)
+        # Cevap metnini gönder (sadece komutlardan sonra veya kayıtlı değilse)
         if response_text:
             await send_whatsapp_message(phone, response_text)
 

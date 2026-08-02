@@ -22,24 +22,8 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
-# Java Build
-target/
 
-# Node.js
-node_modules/
+# Frontend
 frontend/node_modules/
-
-# Next.js
-.next/
 frontend/.next/
-
-# IDE
-.idea/
-.vscode/
-
-# Environment
-.env
-.env.local
-
-whatsapp-bot/.env
-backend/src/main/resources/application-local.properties
+frontend/.env.local

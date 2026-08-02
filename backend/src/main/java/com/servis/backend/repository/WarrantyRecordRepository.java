@@ -11,5 +11,4 @@ public interface WarrantyRecordRepository extends JpaRepository<WarrantyRecord, 
     
     // Bir cihaza ait belirli tipteki (PARTS, LABOR, GENERAL) garantiyi bul
     Optional<WarrantyRecord> findByDeviceIdAndWarrantyType(Long deviceId, String warrantyType);
-    
 }
