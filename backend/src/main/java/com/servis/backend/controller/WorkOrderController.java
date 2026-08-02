@@ -1,7 +1,10 @@
 package com.servis.backend.controller;
 
+import com.servis.backend.dto.WorkOrderLifecycleUpdate;
+import com.servis.backend.dto.WorkOrderTimelineEventDto;
 import com.servis.backend.entity.Technician;
 import com.servis.backend.entity.User;
+import com.servis.backend.entity.WhatsAppOutbox;
 import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.entity.WorkOrderAttachment;
 import com.servis.backend.entity.WorkOrderStatusHistory;
@@ -9,6 +12,7 @@ import com.servis.backend.security.WorkOrderAccessGuard;
 import com.servis.backend.service.CustomerService;
 import com.servis.backend.service.PdfService;
 import com.servis.backend.service.TechnicianService;
+import com.servis.backend.service.WhatsAppOutboxService;
 import com.servis.backend.service.WorkOrderAttachmentService;
 import com.servis.backend.service.WorkOrderService;
 import com.servis.backend.util.PhoneNormalizer;
@@ -19,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -26,8 +31,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -52,6 +59,9 @@ public class WorkOrderController {
 
     @Autowired
     private CustomerService customerService;
+
+    @Autowired
+    private WhatsAppOutboxService whatsAppOutboxService;
 
     @GetMapping
     public Page<WorkOrder> getAll(
@@ -144,6 +154,11 @@ public class WorkOrderController {
             @RequestParam String status,
             @RequestParam(defaultValue = "WEB") String channel,
             @RequestParam(required = false) String technicianWhatsapp,
+            @RequestParam(required = false) String cancellationReason,
+            @RequestParam(required = false) String resolutionNote,
+            @RequestParam(required = false) String deliveryNote,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime estimatedCompletionAt,
             @AuthenticationPrincipal UserDetails userDetails,
             Authentication authentication) {
         User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
@@ -151,8 +166,25 @@ public class WorkOrderController {
         if (technicianWhatsapp == null || technicianWhatsapp.isBlank()) {
             workOrderAccessGuard.assertCanModify(existing, authentication);
         }
+        WorkOrderLifecycleUpdate lifecycle = new WorkOrderLifecycleUpdate();
+        lifecycle.setCancellationReason(cancellationReason);
+        lifecycle.setResolutionNote(resolutionNote);
+        lifecycle.setDeliveryNote(deliveryNote);
+        lifecycle.setEstimatedCompletionAt(estimatedCompletionAt);
         return ResponseEntity.ok(workOrderService.updateStatus(
-                id, status, currentUser, channel, technicianWhatsapp));
+                id, status, currentUser, channel, technicianWhatsapp, lifecycle));
+    }
+
+    @PutMapping("/{id}/lifecycle")
+    public ResponseEntity<WorkOrder> updateLifecycle(
+            @PathVariable Long id,
+            @RequestBody WorkOrderLifecycleUpdate lifecycle,
+            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication) {
+        User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
+        WorkOrder existing = workOrderService.getWorkOrderById(id);
+        workOrderAccessGuard.assertCanModify(existing, authentication);
+        return ResponseEntity.ok(workOrderService.updateLifecycleNotes(id, lifecycle, currentUser));
     }
 
     @PutMapping("/{id}/assign/{technicianId}")
@@ -175,6 +207,55 @@ public class WorkOrderController {
     @GetMapping("/{id}/history")
     public ResponseEntity<List<WorkOrderStatusHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(workOrderService.getStatusHistory(id));
+    }
+
+    @GetMapping("/{id}/timeline")
+    public ResponseEntity<List<WorkOrderTimelineEventDto>> getTimeline(@PathVariable Long id) {
+        return ResponseEntity.ok(workOrderService.getTimeline(id));
+    }
+
+    @GetMapping("/{id}/whatsapp-outbox")
+    public ResponseEntity<List<WhatsAppOutbox>> listWhatsAppOutbox(
+            @PathVariable Long id,
+            Authentication authentication) {
+        WorkOrder existing = workOrderService.getWorkOrderById(id);
+        workOrderAccessGuard.assertCanModify(existing, authentication);
+        return ResponseEntity.ok(whatsAppOutboxService.listByWorkOrder(id));
+    }
+
+    @PostMapping("/{id}/whatsapp-outbox/{outboxId}/retry")
+    public ResponseEntity<?> retryWhatsAppOutbox(
+            @PathVariable Long id,
+            @PathVariable Long outboxId,
+            Authentication authentication) {
+        WorkOrder existing = workOrderService.getWorkOrderById(id);
+        workOrderAccessGuard.assertCanModify(existing, authentication);
+        WhatsAppOutbox existingOutbox = whatsAppOutboxService.listByWorkOrder(id).stream()
+                .filter(o -> o.getId().equals(outboxId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Outbox kaydı bulunamadı"));
+        try {
+            return ResponseEntity.ok(whatsAppOutboxService.requeueForRetry(existingOutbox.getId()));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/whatsapp/retry")
+    public ResponseEntity<?> retryFailedWhatsApp(
+            @PathVariable Long id,
+            Authentication authentication) {
+        WorkOrder existing = workOrderService.getWorkOrderById(id);
+        workOrderAccessGuard.assertCanModify(existing, authentication);
+        List<WhatsAppOutbox> requeued = whatsAppOutboxService.requeueFailedForWorkOrder(id);
+        return ResponseEntity.ok(Map.of(
+                "workOrderId", id,
+                "requeuedCount", requeued.size(),
+                "items", requeued
+        ));
     }
 
     @PostMapping("/{id}/upload")

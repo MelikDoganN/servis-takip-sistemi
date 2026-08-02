@@ -218,7 +218,7 @@ class WorkOrderWhatsAppNotifyTest {
         verify(whatsAppNotificationClient).sendNotification(captor.capture());
         assertEquals(WhatsAppNotificationRequest.EVENT_STATUS_CHANGED, captor.getValue().getEventType());
         assertTrue(captor.getValue().getMessage().contains("SRV-2026-000052"));
-        assertTrue(captor.getValue().getMessage().contains("Parça Bekliyor"));
+        assertTrue(captor.getValue().getMessage().contains("parça bekleniyor"));
         assertEquals("WAITING_PARTS", captor.getValue().getTargetStatus());
     }
 
@@ -266,13 +266,13 @@ class WorkOrderWhatsAppNotifyTest {
     void statusChangeMessage_MapsKnownStatuses() {
         String open = WorkOrderService.statusChangeMessage("SRV-2026-000001", "OPEN");
         assertTrue(open.contains("SRV-2026-000001"));
-        assertTrue(open.contains("Açık"));
+        assertTrue(open.contains("açıldı"));
         String assigned = WorkOrderService.statusChangeMessage("SRV-2026-000001", "ASSIGNED");
-        assertTrue(assigned.contains("Teknisyen Atandı"));
+        assertTrue(assigned.contains("teknisyen atandı"));
         String inProgress = WorkOrderService.statusChangeMessage("SRV-2026-000001", "IN_PROGRESS");
-        assertTrue(inProgress.contains("İşlemde"));
+        assertTrue(inProgress.contains("işlem başladı"));
         String cancelled = WorkOrderService.statusChangeMessage("SRV-2026-000001", "CANCELLED");
-        assertTrue(cancelled.contains("İptal Edildi"));
+        assertTrue(cancelled.contains("iptal edildi"));
     }
 
     @Test

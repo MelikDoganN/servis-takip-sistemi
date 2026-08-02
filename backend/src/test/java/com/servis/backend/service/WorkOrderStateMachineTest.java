@@ -85,6 +85,15 @@ class WorkOrderStateMachineTest {
     }
 
     @Test
+    void cancelFromAssigned_Ok() {
+        workOrder.setStatus("ASSIGNED");
+        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(workOrder));
+        when(workOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        assertEquals("CANCELLED",
+                workOrderService.updateStatus(1L, "CANCELLED", null, "WEB").getStatus());
+    }
+
+    @Test
     void cancelledIsTerminal() {
         workOrder.setStatus("CANCELLED");
         when(workOrderRepository.findById(1L)).thenReturn(Optional.of(workOrder));

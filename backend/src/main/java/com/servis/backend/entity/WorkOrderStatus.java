@@ -6,6 +6,8 @@ public enum WorkOrderStatus {
     IN_PROGRESS,
     WAITING_PARTS,
     RESOLVED,
+    READY_FOR_DELIVERY,
+    DELIVERED,
     CLOSED,
     CANCELLED
 }

@@ -215,12 +215,14 @@ public class NotificationService {
 
     private static String statusTitle(String status) {
         return switch (status == null ? "" : status) {
-            case "RESOLVED" -> "İş emri çözüldü";
+            case "RESOLVED" -> "Servis tamamlandı";
+            case "READY_FOR_DELIVERY" -> "Teslime hazır";
+            case "DELIVERED" -> "Teslim edildi";
             case "CLOSED" -> "İş emri kapatıldı";
             case "CANCELLED" -> "İş emri iptal edildi";
-            case "IN_PROGRESS" -> "İş emri ilerliyor";
+            case "IN_PROGRESS" -> "İşlem başladı";
             case "WAITING_PARTS" -> "Parça bekleniyor";
-            case "ASSIGNED" -> "İş emri atandı";
+            case "ASSIGNED" -> "Teknisyen atandı";
             case "OPEN" -> "İş emri açıldı";
             default -> "İş emri durumu güncellendi";
         };
@@ -234,9 +236,11 @@ public class NotificationService {
         return switch (status) {
             case "OPEN" -> sn + " numaralı servis kaydı açıldı.";
             case "ASSIGNED" -> sn + " numaralı servis kaydına teknisyen atandı.";
-            case "IN_PROGRESS" -> sn + " numaralı servis kaydı İşlemde olarak güncellendi.";
+            case "IN_PROGRESS" -> sn + " numaralı servis kaydında işlem başladı.";
             case "WAITING_PARTS" -> sn + " numaralı servis kaydı için parça bekleniyor.";
-            case "RESOLVED" -> sn + " numaralı servis kaydı çözüldü.";
+            case "RESOLVED" -> sn + " numaralı servis kaydı tamamlandı.";
+            case "READY_FOR_DELIVERY" -> sn + " numaralı servis kaydı teslime hazır.";
+            case "DELIVERED" -> sn + " numaralı servis kaydı teslim edildi.";
             case "CLOSED" -> sn + " numaralı servis kaydı kapatıldı.";
             case "CANCELLED" -> sn + " numaralı servis kaydı iptal edildi.";
             default -> sn + " numaralı servis kaydının durumu güncellendi: " + status + ".";

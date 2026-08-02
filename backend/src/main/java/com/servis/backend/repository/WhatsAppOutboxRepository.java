@@ -20,6 +20,10 @@ public interface WhatsAppOutboxRepository extends JpaRepository<WhatsAppOutbox, 
 
     Optional<WhatsAppOutbox> findFirstByStatusInOrderByCreatedAtDesc(List<String> statuses);
 
+    List<WhatsAppOutbox> findByWorkOrderIdAndStatus(Long workOrderId, String status);
+
+    List<WhatsAppOutbox> findByWorkOrderIdOrderByCreatedAtDesc(Long workOrderId);
+
     @Query("SELECT o FROM WhatsAppOutbox o WHERE o.status = 'PENDING' "
             + "AND (o.nextAttemptAt IS NULL OR o.nextAttemptAt <= :now) "
             + "ORDER BY o.createdAt ASC")

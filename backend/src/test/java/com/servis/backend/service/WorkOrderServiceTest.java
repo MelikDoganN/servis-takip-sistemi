@@ -143,14 +143,24 @@ class WorkOrderServiceTest {
     }
 
     @Test
-    void updateStatus_FromOpenToClosed_ShouldSucceed() {
+    void updateStatus_FromOpenToClosed_ShouldFail() {
+        workOrder.setStatus("OPEN");
+        when(workOrderRepository.findById(1L)).thenReturn(Optional.of(workOrder));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                workOrderService.updateStatus(1L, "CLOSED", null, "WEB"));
+        assertEquals(400, ex.getStatusCode().value());
+    }
+
+    @Test
+    void updateStatus_FromOpenToCancel_ShouldSucceed() {
         workOrder.setStatus("OPEN");
         when(workOrderRepository.findById(1L)).thenReturn(Optional.of(workOrder));
         when(workOrderRepository.save(any(WorkOrder.class))).thenReturn(workOrder);
 
         assertDoesNotThrow(() -> {
-            WorkOrder updated = workOrderService.updateStatus(1L, "CLOSED", null, "WEB");
-            assertEquals("CLOSED", updated.getStatus());
+            WorkOrder updated = workOrderService.updateStatus(1L, "CANCELLED", null, "WEB");
+            assertEquals("CANCELLED", updated.getStatus());
         });
     }
 

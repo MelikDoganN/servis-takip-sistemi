@@ -46,7 +46,7 @@ public class WorkOrder {
 
    
     @Column(length = 30)
-    private String status; // OPEN, ASSIGNED, WAITING_PARTS, RESOLVED, CLOSED
+    private String status;
 
     @Column(length = 20)
     private String priority; // LOW, MEDIUM, HIGH
@@ -63,8 +63,38 @@ public class WorkOrder {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
+
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
+
+    @Column(name = "estimated_completion_at")
+    private LocalDateTime estimatedCompletionAt;
+
+    @Column(name = "customer_notified_at")
+    private LocalDateTime customerNotifiedAt;
+
+    @Column(name = "delivery_note", columnDefinition = "TEXT")
+    private String deliveryNote;
+
+    @Column(name = "resolution_note", columnDefinition = "TEXT")
+    private String resolutionNote;
+
+    @Column(name = "cancellation_reason", length = 500)
+    private String cancellationReason;
+
+    @Column(name = "last_notification_status", length = 30)
+    private String lastNotificationStatus;
+
+    @Column(name = "last_whatsapp_message_id", length = 100)
+    private String lastWhatsappMessageId;
+
+    @Column(name = "customer_notification_count", nullable = false)
+    private Integer customerNotificationCount = 0;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

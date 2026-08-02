@@ -1,6 +1,8 @@
 package com.servis.backend.service;
 
 import com.servis.backend.dto.WhatsAppNotificationRequest;
+import com.servis.backend.dto.WorkOrderLifecycleUpdate;
+import com.servis.backend.dto.WorkOrderTimelineEventDto;
 import com.servis.backend.entity.*;
 import com.servis.backend.repository.CustomerRepository;
 import com.servis.backend.repository.DeviceRepository;
@@ -195,12 +197,18 @@ public class WorkOrderService {
 
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel) {
-        return updateStatus(workOrderId, newStatus, changedBy, channel, null);
+        return updateStatus(workOrderId, newStatus, changedBy, channel, null, null);
     }
 
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel,
                                   String technicianWhatsapp) {
+        return updateStatus(workOrderId, newStatus, changedBy, channel, technicianWhatsapp, null);
+    }
+
+    @Transactional
+    public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel,
+                                  String technicianWhatsapp, WorkOrderLifecycleUpdate lifecycle) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
         String oldStatus = workOrder.getStatus();
 
@@ -209,26 +217,77 @@ public class WorkOrderService {
         }
 
         if (oldStatus != null && oldStatus.equals(newStatus)) {
-            return workOrder;
+            applyLifecycleFields(workOrder, newStatus, lifecycle);
+            return workOrderRepository.save(workOrder);
         }
 
         validateTransition(oldStatus, newStatus);
+        applyLifecycleFields(workOrder, newStatus, lifecycle);
 
         workOrder.setStatus(newStatus);
+        LocalDateTime now = LocalDateTime.now();
         switch (newStatus) {
-            case "ASSIGNED" -> workOrder.setAssignedAt(LocalDateTime.now());
-            case "IN_PROGRESS" -> { /* timestamp optional */ }
-            case "WAITING_PARTS" -> workOrder.setWaitingForPartsSince(LocalDateTime.now());
-            case "RESOLVED" -> workOrder.setCompletedAt(LocalDateTime.now());
-            case "CLOSED" -> workOrder.setClosedAt(LocalDateTime.now());
-            case "CANCELLED" -> { /* terminal */ }
+            case "ASSIGNED" -> workOrder.setAssignedAt(now);
+            case "IN_PROGRESS" -> { /* no dedicated timestamp */ }
+            case "WAITING_PARTS" -> workOrder.setWaitingForPartsSince(now);
+            case "RESOLVED" -> {
+                workOrder.setResolvedAt(now);
+                workOrder.setCompletedAt(now);
+            }
+            case "READY_FOR_DELIVERY" -> { /* note may be set via lifecycle */ }
+            case "DELIVERED" -> workOrder.setDeliveredAt(now);
+            case "CLOSED" -> workOrder.setClosedAt(now);
+            case "CANCELLED" -> { /* cancellationReason via lifecycle */ }
         }
 
         WorkOrder updated = workOrderRepository.save(workOrder);
-        saveHistory(updated, changedBy, oldStatus, newStatus, oldStatus + " → " + newStatus, channel);
+        String historyDesc = buildHistoryDescription(oldStatus, newStatus, lifecycle);
+        saveHistory(updated, changedBy, oldStatus, newStatus, historyDesc, channel);
         notificationService.notifyStatusChanged(updated, newStatus);
         notifyStatusChanged(updated, oldStatus, newStatus);
         return updated;
+    }
+
+    private void applyLifecycleFields(WorkOrder workOrder, String newStatus, WorkOrderLifecycleUpdate lifecycle) {
+        if (lifecycle == null) {
+            return;
+        }
+        if (lifecycle.getEstimatedCompletionAt() != null) {
+            workOrder.setEstimatedCompletionAt(lifecycle.getEstimatedCompletionAt());
+        }
+        if (lifecycle.getResolutionNote() != null && !lifecycle.getResolutionNote().isBlank()) {
+            workOrder.setResolutionNote(lifecycle.getResolutionNote().trim());
+        }
+        if (lifecycle.getDeliveryNote() != null && !lifecycle.getDeliveryNote().isBlank()) {
+            workOrder.setDeliveryNote(lifecycle.getDeliveryNote().trim());
+        }
+        if (lifecycle.getCancellationReason() != null && !lifecycle.getCancellationReason().isBlank()) {
+            workOrder.setCancellationReason(lifecycle.getCancellationReason().trim());
+        } else if ("CANCELLED".equals(newStatus)
+                && (workOrder.getCancellationReason() == null || workOrder.getCancellationReason().isBlank())) {
+            // opsiyonel: neden yoksa boş bırak
+        }
+    }
+
+    private static String buildHistoryDescription(String oldStatus, String newStatus,
+                                                  WorkOrderLifecycleUpdate lifecycle) {
+        String base = (oldStatus != null ? oldStatus : "?") + " → " + newStatus;
+        if (lifecycle == null) {
+            return base;
+        }
+        if ("CANCELLED".equals(newStatus) && lifecycle.getCancellationReason() != null
+                && !lifecycle.getCancellationReason().isBlank()) {
+            return base + " | İptal: " + lifecycle.getCancellationReason().trim();
+        }
+        if ("RESOLVED".equals(newStatus) && lifecycle.getResolutionNote() != null
+                && !lifecycle.getResolutionNote().isBlank()) {
+            return base + " | Çözüm: " + lifecycle.getResolutionNote().trim();
+        }
+        if (("DELIVERED".equals(newStatus) || "READY_FOR_DELIVERY".equals(newStatus))
+                && lifecycle.getDeliveryNote() != null && !lifecycle.getDeliveryNote().isBlank()) {
+            return base + " | Teslim: " + lifecycle.getDeliveryNote().trim();
+        }
+        return base;
     }
 
     @Transactional
@@ -403,7 +462,9 @@ public class WorkOrderService {
             case "ASSIGNED" -> "Teknisyen Atandı";
             case "IN_PROGRESS" -> "İşlemde";
             case "WAITING_PARTS" -> "Parça Bekliyor";
-            case "RESOLVED" -> "Çözüldü";
+            case "RESOLVED" -> "Tamamlandı";
+            case "READY_FOR_DELIVERY" -> "Teslime Hazır";
+            case "DELIVERED" -> "Teslim Edildi";
             case "CLOSED" -> "Kapatıldı";
             case "CANCELLED" -> "İptal Edildi";
             default -> status;
@@ -419,12 +480,17 @@ public class WorkOrderService {
         if (status == null) {
             return null;
         }
-        String label = statusLabelTr(status);
         String sn = serviceNumber != null && !serviceNumber.isBlank() ? serviceNumber : "SRV-????-??????";
         return switch (status) {
-            case "OPEN", "ASSIGNED", "IN_PROGRESS", "WAITING_PARTS",
-                 "RESOLVED", "CLOSED", "CANCELLED" ->
-                    sn + " numaralı servis kaydınızın durumu " + label + " olarak güncellendi.";
+            case "OPEN" -> sn + " numaralı servis kaydınız açıldı.";
+            case "ASSIGNED" -> sn + " numaralı servis kaydınıza teknisyen atandı.";
+            case "IN_PROGRESS" -> sn + " numaralı servis kaydınızda işlem başladı.";
+            case "WAITING_PARTS" -> sn + " numaralı servis kaydınız için parça bekleniyor.";
+            case "RESOLVED" -> sn + " numaralı servis kaydınız tamamlandı.";
+            case "READY_FOR_DELIVERY" -> sn + " numaralı servis kaydınız teslime hazır.";
+            case "DELIVERED" -> sn + " numaralı servis kaydınız teslim edildi.";
+            case "CLOSED" -> sn + " numaralı servis kaydınız kapatıldı.";
+            case "CANCELLED" -> sn + " numaralı servis kaydınız iptal edildi.";
             default -> null;
         };
     }
@@ -445,43 +511,54 @@ public class WorkOrderService {
         if (newStatus == null || newStatus.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Geçersiz durum geçişi");
         }
+        if ("CANCELLED".equals(newStatus)) {
+            if ("CLOSED".equals(oldStatus) || "CANCELLED".equals(oldStatus)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Kapalı veya iptal kaydı iptal edilemez");
+            }
+            return;
+        }
         switch (oldStatus) {
             case "OPEN" -> {
-                if (!newStatus.equals("ASSIGNED")
-                        && !newStatus.equals("CANCELLED")
-                        && !newStatus.equals("CLOSED")) {
+                if (!newStatus.equals("ASSIGNED")) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "OPEN → sadece ASSIGNED, CANCELLED veya CLOSED");
+                            "OPEN → sadece ASSIGNED veya CANCELLED");
                 }
             }
             case "ASSIGNED" -> {
-                if (!newStatus.equals("IN_PROGRESS")
-                        && !newStatus.equals("WAITING_PARTS")
-                        && !newStatus.equals("CANCELLED")) {
+                if (!newStatus.equals("IN_PROGRESS") && !newStatus.equals("WAITING_PARTS")) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "ASSIGNED → sadece IN_PROGRESS, WAITING_PARTS veya CANCELLED");
                 }
             }
             case "IN_PROGRESS" -> {
-                if (!newStatus.equals("WAITING_PARTS")
-                        && !newStatus.equals("RESOLVED")
-                        && !newStatus.equals("CANCELLED")) {
+                if (!newStatus.equals("WAITING_PARTS") && !newStatus.equals("RESOLVED")) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "IN_PROGRESS → sadece WAITING_PARTS, RESOLVED veya CANCELLED");
                 }
             }
             case "WAITING_PARTS" -> {
-                if (!newStatus.equals("IN_PROGRESS")
-                        && !newStatus.equals("RESOLVED")
-                        && !newStatus.equals("CANCELLED")) {
+                if (!newStatus.equals("IN_PROGRESS") && !newStatus.equals("RESOLVED")) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "WAITING_PARTS → sadece IN_PROGRESS, RESOLVED veya CANCELLED");
                 }
             }
             case "RESOLVED" -> {
+                if (!newStatus.equals("READY_FOR_DELIVERY")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "RESOLVED → sadece READY_FOR_DELIVERY veya CANCELLED");
+                }
+            }
+            case "READY_FOR_DELIVERY" -> {
+                if (!newStatus.equals("DELIVERED")) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "READY_FOR_DELIVERY → sadece DELIVERED veya CANCELLED");
+                }
+            }
+            case "DELIVERED" -> {
                 if (!newStatus.equals("CLOSED")) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "RESOLVED → sadece CLOSED");
+                            "DELIVERED → sadece CLOSED veya CANCELLED");
                 }
             }
             case "CLOSED" -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -512,5 +589,45 @@ public class WorkOrderService {
 
     public List<WorkOrderStatusHistory> getStatusHistory(Long workOrderId) {
         return historyRepository.findByWorkOrderIdOrderByCreatedAtDesc(workOrderId);
+    }
+
+    public List<WorkOrderTimelineEventDto> getTimeline(Long workOrderId) {
+        // varlık kontrolü
+        getWorkOrderById(workOrderId);
+        return historyRepository.findByWorkOrderIdOrderByCreatedAtDesc(workOrderId).stream()
+                .map(this::toTimelineDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public WorkOrder updateLifecycleNotes(Long workOrderId, WorkOrderLifecycleUpdate lifecycle, User changedBy) {
+        WorkOrder workOrder = getWorkOrderById(workOrderId);
+        if (WorkOrderStatus.CLOSED.name().equals(workOrder.getStatus())
+                || WorkOrderStatus.CANCELLED.name().equals(workOrder.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Kapalı veya iptal kaydı güncellenemez");
+        }
+        applyLifecycleFields(workOrder, workOrder.getStatus(), lifecycle);
+        WorkOrder saved = workOrderRepository.save(workOrder);
+        if (lifecycle != null) {
+            saveHistory(saved, changedBy, saved.getStatus(), saved.getStatus(),
+                    "Yaşam döngüsü alanları güncellendi", "WEB");
+        }
+        return saved;
+    }
+
+    private WorkOrderTimelineEventDto toTimelineDto(WorkOrderStatusHistory h) {
+        WorkOrderTimelineEventDto dto = new WorkOrderTimelineEventDto();
+        dto.setId(h.getId());
+        dto.setOldStatus(h.getOldStatus());
+        dto.setNewStatus(h.getNewStatus());
+        dto.setDescription(h.getDescription());
+        dto.setChannel(h.getChannel());
+        dto.setCreatedAt(h.getCreatedAt());
+        if (h.getChangedBy() != null) {
+            dto.setChangedByUserId(h.getChangedBy().getId());
+            dto.setChangedByName(h.getChangedBy().getFullName());
+        }
+        return dto;
     }
 }

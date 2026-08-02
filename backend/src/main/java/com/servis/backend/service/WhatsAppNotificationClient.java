@@ -44,6 +44,9 @@ public class WhatsAppNotificationClient {
     @Autowired
     private WhatsAppOutboxService whatsAppOutboxService;
 
+    @Autowired
+    private WorkOrderNotificationTracker workOrderNotificationTracker;
+
     @Value("${whatsapp.bot.url:}")
     private String botBaseUrl;
 
@@ -70,16 +73,19 @@ public class WhatsAppNotificationClient {
         if (botBaseUrl == null || botBaseUrl.isBlank()) {
             log.warn("WhatsApp bildirimi atlandı: WHATSAPP_BOT_URL tanımlı değil");
             logOutbound(request, phone, "SKIPPED", "BOT_URL_MISSING");
+            workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "SKIPPED", null);
             return;
         }
         if (botApiKey == null || botApiKey.isBlank()) {
             log.warn("WhatsApp bildirimi atlandı: WHATSAPP_BOT_API_KEY tanımlı değil");
             logOutbound(request, phone, "SKIPPED", "BOT_API_KEY_MISSING");
+            workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "SKIPPED", null);
             return;
         }
         if (phone == null || phone.isBlank() || request.getMessage() == null || request.getMessage().isBlank()) {
             log.warn("WhatsApp bildirimi atlandı: telefon veya mesaj boş");
             logOutbound(request, phone, "SKIPPED", "PHONE_OR_MESSAGE_EMPTY");
+            workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "SKIPPED", null);
             return;
         }
 
@@ -95,10 +101,13 @@ public class WhatsAppNotificationClient {
         SendResult result = doHttpSend(phone, request);
         if (result.success) {
             logOutbound(request, phone, "SENT", null);
+            workOrderNotificationTracker.recordResult(
+                    request.getWorkOrderId(), "SENT", result.messageId);
             return;
         }
 
         logOutbound(request, phone, "FAILED", result.error);
+        workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "FAILED", null);
         if (request.getWorkOrderId() != null && request.getEventType() != null) {
             boolean queued = whatsAppOutboxService.enqueueIfAbsent(request, phone, result.error);
             if (queued) {
@@ -120,9 +129,11 @@ public class WhatsAppNotificationClient {
         SendResult result = doHttpSend(phone, request);
         if (result.success) {
             logOutbound(request, phone, "SENT", null);
+            workOrderNotificationTracker.recordResult(outbox.getWorkOrderId(), "SENT", result.messageId);
             return true;
         }
         logOutbound(request, phone, "FAILED", result.error);
+        workOrderNotificationTracker.recordResult(outbox.getWorkOrderId(), "FAILED", null);
         return false;
     }
 
@@ -183,15 +194,37 @@ public class WhatsAppNotificationClient {
                 body.put("technicianName", request.getTechnicianName());
             }
 
-            restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    url, new HttpEntity<>(body, headers), String.class);
             log.info("WhatsApp bildirimi gönderildi: phone={} event={}",
                     maskPhone(phone), request.getEventType());
-            return SendResult.ok();
+            String messageId = extractMessageId(response != null ? response.getBody() : null);
+            return SendResult.ok(messageId);
         } catch (Exception e) {
             log.warn("WhatsApp bildirimi gönderilemedi: phone={}, reason={}",
                     maskPhone(phone), e.getClass().getSimpleName());
             return SendResult.fail(e.getClass().getSimpleName());
         }
+    }
+
+    private static String extractMessageId(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        // Basit yakalama: "messageId":"..." veya "id":"wamid...."
+        int idx = body.indexOf("wamid.");
+        if (idx >= 0) {
+            int end = idx;
+            while (end < body.length()) {
+                char c = body.charAt(end);
+                if (c == '"' || c == '\'' || c == ',' || c == '}' || Character.isWhitespace(c)) {
+                    break;
+                }
+                end++;
+            }
+            return body.substring(idx, end);
+        }
+        return null;
     }
 
     private boolean tryAcquireDedup(Long workOrderId, String eventType, String eventKey) {
@@ -252,18 +285,24 @@ public class WhatsAppNotificationClient {
     private static final class SendResult {
         final boolean success;
         final String error;
+        final String messageId;
 
-        private SendResult(boolean success, String error) {
+        private SendResult(boolean success, String error, String messageId) {
             this.success = success;
             this.error = error;
+            this.messageId = messageId;
         }
 
         static SendResult ok() {
-            return new SendResult(true, null);
+            return new SendResult(true, null, null);
+        }
+
+        static SendResult ok(String messageId) {
+            return new SendResult(true, null, messageId);
         }
 
         static SendResult fail(String error) {
-            return new SendResult(false, error);
+            return new SendResult(false, error, null);
         }
     }
 }

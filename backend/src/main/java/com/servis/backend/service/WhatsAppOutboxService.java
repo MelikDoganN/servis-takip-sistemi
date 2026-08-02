@@ -117,12 +117,48 @@ public class WhatsAppOutboxService {
             if (delayIdx < 0) {
                 delayIdx = 0;
             }
-            // attempt 1 failed → next delay index 0 (1m already used at enqueue);
-            // attempt 2 failed → delay 5m (index 1); attempt 3 would fail terminal
             int nextDelay = RETRY_DELAY_MINUTES[Math.min(attempts - 1, RETRY_DELAY_MINUTES.length - 1)];
             row.setNextAttemptAt(LocalDateTime.now().plusMinutes(nextDelay));
         }
         whatsAppOutboxRepository.save(row);
+    }
+
+    /**
+     * Başarısız (veya bekleyen) outbox kaydını hemen yeniden kuyruğa alır.
+     */
+    @Transactional
+    public WhatsAppOutbox requeueForRetry(Long outboxId) {
+        WhatsAppOutbox row = whatsAppOutboxRepository.findById(outboxId)
+                .orElseThrow(() -> new IllegalArgumentException("Outbox kaydı bulunamadı: " + outboxId));
+        if (!WhatsAppOutbox.STATUS_FAILED.equals(row.getStatus())
+                && !WhatsAppOutbox.STATUS_PENDING.equals(row.getStatus())) {
+            throw new IllegalStateException("Yalnız PENDING veya FAILED kayıtlar yeniden kuyruğa alınabilir");
+        }
+        row.setStatus(WhatsAppOutbox.STATUS_PENDING);
+        row.setNextAttemptAt(LocalDateTime.now());
+        row.setClaimToken(null);
+        row.setClaimedAt(null);
+        row.setLastError(null);
+        // Manuel retry için deneme sayacını sıfırlama: bir şans daha
+        if (row.getAttemptCount() >= MAX_ATTEMPTS) {
+            row.setAttemptCount(MAX_ATTEMPTS - 1);
+        }
+        return whatsAppOutboxRepository.save(row);
+    }
+
+    @Transactional
+    public List<WhatsAppOutbox> requeueFailedForWorkOrder(Long workOrderId) {
+        List<WhatsAppOutbox> failed = whatsAppOutboxRepository
+                .findByWorkOrderIdAndStatus(workOrderId, WhatsAppOutbox.STATUS_FAILED);
+        java.util.ArrayList<WhatsAppOutbox> result = new java.util.ArrayList<>();
+        for (WhatsAppOutbox row : failed) {
+            result.add(requeueForRetry(row.getId()));
+        }
+        return result;
+    }
+
+    public List<WhatsAppOutbox> listByWorkOrder(Long workOrderId) {
+        return whatsAppOutboxRepository.findByWorkOrderIdOrderByCreatedAtDesc(workOrderId);
     }
 
     public WhatsAppNotificationRequest fromOutbox(WhatsAppOutbox row) {

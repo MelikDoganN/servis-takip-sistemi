@@ -31,4 +31,17 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrder, Long> {
 
     @Query(value = "SELECT nextval('work_order_service_seq')", nativeQuery = true)
     Long nextServiceNumberSequence();
+
+    long countByStatus(String status);
+
+    long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    long countByResolvedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    long countByDeliveredAtBetween(LocalDateTime start, LocalDateTime end);
+
+    @Query(value = "SELECT AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at, completed_at) - created_at)) / 3600.0) "
+            + "FROM work_orders WHERE COALESCE(resolved_at, completed_at) IS NOT NULL",
+            nativeQuery = true)
+    Double averageResolutionHours();
 }
