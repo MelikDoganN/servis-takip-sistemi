@@ -1,5 +1,7 @@
 package com.servis.backend.service;
 
+import com.servis.backend.dto.WhatsAppNotificationRequest;
+import com.servis.backend.repository.NotificationDedupRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,12 @@ class WhatsAppNotificationClientTest {
     @Mock
     private RestTemplate restTemplate;
 
+    @Mock
+    private NotificationDedupRepository notificationDedupRepository;
+
+    @Mock
+    private BotInteractionLogService botInteractionLogService;
+
     @InjectMocks
     private WhatsAppNotificationClient client;
 
@@ -55,22 +63,50 @@ class WhatsAppNotificationClientTest {
     }
 
     @Test
-    void sendNotification_WithUrlAndKey_SendsHeader() {
+    void sendNotification_WithUrlAndKey_SendsHeaderAndEventType() {
         ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com/");
         ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
         when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok("ok"));
+        when(notificationDedupRepository.existsByWorkOrderIdAndEventTypeAndEventKey(any(), any(), any()))
+                .thenReturn(false);
+        when(notificationDedupRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        client.sendNotification("905551112233", "Merhaba");
+        WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+        req.setPhone("0555 111 22 33");
+        req.setMessage("Merhaba");
+        req.setEventType(WhatsAppNotificationRequest.EVENT_WORK_ORDER_CREATED);
+        req.setWorkOrderId(10L);
+        req.setTargetStatus("OPEN");
+        client.sendNotification(req);
 
         ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<HttpEntity<Map<String, String>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        ArgumentCaptor<HttpEntity<Map<String, Object>>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForEntity(urlCaptor.capture(), entityCaptor.capture(), eq(String.class));
 
         assertEquals("https://bot.example.com/send-notification", urlCaptor.getValue());
         assertEquals("secret-key", entityCaptor.getValue().getHeaders().getFirst("X-Bot-Api-Key"));
         assertEquals("905551112233", entityCaptor.getValue().getBody().get("phone"));
+        assertEquals("WORK_ORDER_CREATED", entityCaptor.getValue().getBody().get("eventType"));
+    }
+
+    @Test
+    void sendNotification_DuplicateEvent_SkipsHttp() {
+        ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com");
+        ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
+        when(notificationDedupRepository.existsByWorkOrderIdAndEventTypeAndEventKey(10L, "STATUS_CHANGED", "CLOSED"))
+                .thenReturn(true);
+
+        WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+        req.setPhone("905551112233");
+        req.setMessage("Kapandı");
+        req.setEventType(WhatsAppNotificationRequest.EVENT_STATUS_CHANGED);
+        req.setWorkOrderId(10L);
+        req.setTargetStatus("CLOSED");
+        client.sendNotification(req);
+
+        verify(restTemplate, never()).postForEntity(anyString(), any(), eq(String.class));
     }
 
     @Test

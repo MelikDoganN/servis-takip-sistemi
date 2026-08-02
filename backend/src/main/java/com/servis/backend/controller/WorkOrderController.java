@@ -6,10 +6,12 @@ import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.entity.WorkOrderAttachment;
 import com.servis.backend.entity.WorkOrderStatusHistory;
 import com.servis.backend.security.WorkOrderAccessGuard;
+import com.servis.backend.service.CustomerService;
 import com.servis.backend.service.PdfService;
 import com.servis.backend.service.TechnicianService;
 import com.servis.backend.service.WorkOrderAttachmentService;
 import com.servis.backend.service.WorkOrderService;
+import com.servis.backend.util.PhoneNormalizer;
 
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,12 +50,16 @@ public class WorkOrderController {
     @Autowired
     private TechnicianService technicianService;
 
+    @Autowired
+    private CustomerService customerService;
+
     @GetMapping
     public Page<WorkOrder> getAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String technicianWhatsapp) {
+            @RequestParam(required = false) String technicianWhatsapp,
+            @RequestParam(required = false) String customerWhatsapp) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
@@ -61,6 +67,15 @@ public class WorkOrderController {
             try {
                 Technician technician = technicianService.findByWhatsappNumber(technicianWhatsapp);
                 return workOrderService.getWorkOrdersByTechnicianId(technician.getId(), pageable);
+            } catch (RuntimeException e) {
+                return Page.empty(pageable);
+            }
+        }
+
+        if (customerWhatsapp != null && !customerWhatsapp.isEmpty()) {
+            try {
+                var customer = customerService.findByWhatsappNumber(customerWhatsapp);
+                return workOrderService.getWorkOrdersByCustomerId(customer.getId(), pageable);
             } catch (RuntimeException e) {
                 return Page.empty(pageable);
             }
@@ -81,11 +96,11 @@ public class WorkOrderController {
 
         // Müşteri yetki kontrolü (sadece phone parametresi geldiyse)
         if (phone != null && !phone.isEmpty()) {
-            String customerPhone = workOrder.getCustomer().getWhatsappNumber();
-            if (customerPhone == null) {
-                customerPhone = workOrder.getCustomer().getPhone();
-            }
-            if (!phone.equals(customerPhone)) {
+            String whatsapp = workOrder.getCustomer().getWhatsappNumber();
+            String customerPhone = workOrder.getCustomer().getPhone();
+            boolean owns = PhoneNormalizer.matches(phone, whatsapp)
+                    || PhoneNormalizer.matches(phone, customerPhone);
+            if (!owns) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "Bu iş emrine erişim yetkiniz yok."));
             }
@@ -107,12 +122,16 @@ public class WorkOrderController {
             @PathVariable Long id,
             @RequestParam String status,
             @RequestParam(defaultValue = "WEB") String channel,
+            @RequestParam(required = false) String technicianWhatsapp,
             @AuthenticationPrincipal UserDetails userDetails,
             Authentication authentication) {
         User currentUser = workOrderAccessGuard.requireCurrentUser(userDetails);
         WorkOrder existing = workOrderService.getWorkOrderById(id);
-        workOrderAccessGuard.assertCanModify(existing, authentication);
-        return ResponseEntity.ok(workOrderService.updateStatus(id, status, currentUser, channel));
+        if (technicianWhatsapp == null || technicianWhatsapp.isBlank()) {
+            workOrderAccessGuard.assertCanModify(existing, authentication);
+        }
+        return ResponseEntity.ok(workOrderService.updateStatus(
+                id, status, currentUser, channel, technicianWhatsapp));
     }
 
     @PutMapping("/{id}/assign/{technicianId}")

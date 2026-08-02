@@ -10,6 +10,7 @@ import com.servis.backend.repository.RoleRepository;
 import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.UserRepository;
 import com.servis.backend.security.RoleNames;
+import com.servis.backend.util.PhoneNormalizer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class TechnicianService {
@@ -47,8 +49,22 @@ public class TechnicianService {
     }
 
     public Technician findByWhatsappNumber(String whatsappNumber) {
-        return technicianRepository.findByWhatsappNumber(whatsappNumber)
-                .orElseThrow(() -> new RuntimeException("Teknisyen bulunamadı: " + whatsappNumber));
+        return findByWhatsappNumberOptional(whatsappNumber)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Teknisyen bulunamadı"));
+    }
+
+    public Optional<Technician> findByWhatsappNumberOptional(String whatsappNumber) {
+        if (whatsappNumber == null || whatsappNumber.isBlank()) {
+            return Optional.empty();
+        }
+        for (String variant : PhoneNormalizer.searchVariants(whatsappNumber)) {
+            Optional<Technician> found = technicianRepository.findByWhatsappNumber(variant);
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
     }
 
     /**

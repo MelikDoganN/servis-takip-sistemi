@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import json
 import logging
+import time
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -24,13 +25,46 @@ WHATSAPP_BOT_API_KEY = os.getenv("WHATSAPP_BOT_API_KEY")
 BOT_EMAIL = os.getenv("BOT_EMAIL")
 BOT_PASSWORD = os.getenv("BOT_PASSWORD")
 
+CONVERSATION_TTL_SEC = 300
+_conversation_state = {}
+
 bot_token = None
+
+OPEN_CUSTOMER_STATUSES = {"OPEN", "ASSIGNED", "WAITING_PARTS", "RESOLVED", "IN_PROGRESS"}
+OPEN_TECH_STATUSES = {"ASSIGNED", "WAITING_PARTS", "IN_PROGRESS"}
+
+
+def normalize_phone(raw):
+    """Canonical TR format: 90XXXXXXXXXX (Java PhoneNormalizer ile uyumlu)."""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    for ch in (" ", "-", "(", ")", "."):
+        text = text.replace(ch, "")
+    if text.startswith("+"):
+        text = text[1:]
+    digits = "".join(c for c in text if c.isdigit())
+    if not digits:
+        return None
+    if digits.startswith("90") and len(digits) >= 12:
+        national = digits[2:]
+    elif digits.startswith("0") and len(digits) >= 11:
+        national = digits[1:]
+    else:
+        national = digits
+    if len(national) > 10:
+        national = national[-10:]
+    if len(national) != 10:
+        return None
+    return "90" + national
 
 
 def mask_phone(phone):
     if not phone:
         return "***"
-    digits = "".join(c for c in phone if c.isdigit())
+    digits = "".join(c for c in str(phone) if c.isdigit())
     if len(digits) <= 6:
         return "***"
     return f"{digits[:3]}******{digits[-3:]}"
@@ -94,24 +128,142 @@ def verify_meta_signature(raw_body: bytes, signature_header):
     return hmac.compare_digest(digest, expected)
 
 
+def _purge_expired_conversations():
+    now = time.time()
+    expired = [k for k, v in _conversation_state.items() if v.get("expires", 0) < now]
+    for k in expired:
+        _conversation_state.pop(k, None)
+
+
+def get_conversation(phone):
+    _purge_expired_conversations()
+    key = normalize_phone(phone) or phone
+    return _conversation_state.get(key)
+
+
+def set_conversation(phone, state, **data):
+    key = normalize_phone(phone) or phone
+    payload = {"state": state, "expires": time.time() + CONVERSATION_TTL_SEC}
+    payload.update(data)
+    _conversation_state[key] = payload
+
+
+def clear_conversation(phone):
+    key = normalize_phone(phone) or phone
+    _conversation_state.pop(key, None)
+
+
+def warranty_status_label(status):
+    if not status:
+        return "Garanti durumu belirlenemedi."
+    key = str(status).upper()
+    mapping = {
+        "AKTIF": "Garanti devam ediyor.",
+        "ACTIVE": "Garanti devam ediyor.",
+        "SURESI_DOLMUS": "Garanti süresi dolmuş.",
+        "EXPIRED": "Garanti süresi dolmuş.",
+        "TARIH_EKSIK": "Garanti hesabı için satın alma veya kurulum tarihi eksik.",
+        "TANIMLANMAMIS": "Bu cihaz için garanti tanımı bulunamadı.",
+        "UNKNOWN": "Garanti durumu belirlenemedi.",
+    }
+    return mapping.get(key, "Garanti durumu belirlenemedi.")
+
+
+def format_warranty_reply(data, serial):
+    lines = ["Garanti Sorgulama Sonucu"]
+    lines.append(f"Seri No: {data.get('serialNumber') or serial}")
+    if data.get("customerName"):
+        lines.append(f"Müşteri: {data['customerName']}")
+    brand = data.get("brand")
+    model = data.get("model") or data.get("deviceName")
+    if brand or model:
+        device_line = " ".join(p for p in (brand, model) if p)
+        lines.append(f"Cihaz: {device_line}")
+    lines.append(f"Durum: {warranty_status_label(data.get('warrantyStatus'))}")
+    start = data.get("warrantyStart") or data.get("startDate")
+    end = data.get("warrantyEnd") or data.get("endDate")
+    if start:
+        lines.append(f"Başlangıç: {start}")
+    if end:
+        lines.append(f"Bitiş: {end}")
+    return "\n".join(lines)
+
+
+def format_work_order_detail(wo):
+    lines = ["İş Emri Durumu"]
+    lines.append(f"ID: {wo.get('id')}")
+    lines.append(f"Durum: {wo.get('status')}")
+    if wo.get("description"):
+        lines.append(f"Açıklama: {wo['description']}")
+    tech = wo.get("technician") or {}
+    user = tech.get("user") or {}
+    if user.get("fullName"):
+        lines.append(f"Teknisyen: {user['fullName']}")
+    else:
+        lines.append("Teknisyen: Atanmamış")
+    return "\n".join(lines)
+
+
+async def claim_inbound_message(message_id, phone, message_type, command_summary):
+    if not message_id or not WHATSAPP_BOT_API_KEY:
+        return True
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BACKEND_URL}/api/bot/inbound-claim",
+                headers=bot_headers(),
+                json={
+                    "externalMessageId": message_id,
+                    "phone": normalize_phone(phone) or phone,
+                    "messageType": message_type or "text",
+                    "command": (command_summary or "")[:100],
+                    "direction": "INBOUND",
+                    "status": "RECEIVED",
+                },
+            )
+            if resp.status_code == 200:
+                body = resp.json()
+                if body.get("duplicate"):
+                    log.info("Duplicate Meta message atlandı: id=%s", message_id)
+                    return False
+            return True
+    except Exception as e:
+        log.warning("Inbound claim başarısız: %s", type(e).__name__)
+        return True
+
+
+async def log_bot_interaction(**payload):
+    if not WHATSAPP_BOT_API_KEY:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{BACKEND_URL}/api/bot/interactions",
+                headers=bot_headers(),
+                json=payload,
+            )
+    except Exception:
+        pass
+
+
 async def get_user_role(phone: str):
-    """WhatsApp numarasına göre kullanıcı rolünü döndürür: TECHNICIAN, CUSTOMER, UNREGISTERED"""
     try:
         token = get_token()
     except Exception:
         log.warning("Rol tespiti için token alınamadı")
         return "UNREGISTERED"
 
+    phone_q = normalize_phone(phone) or phone
     headers = bot_headers({"Authorization": f"Bearer {token}"})
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
-            f"{BACKEND_URL}/api/technicians/by-whatsapp/{phone}",
+            f"{BACKEND_URL}/api/technicians/by-whatsapp/{phone_q}",
             headers=headers,
         )
         if resp.status_code == 200:
             return "TECHNICIAN"
         resp = await client.get(
-            f"{BACKEND_URL}/api/customers/by-whatsapp/{phone}",
+            f"{BACKEND_URL}/api/customers/by-whatsapp/{phone_q}",
             headers=headers,
         )
         if resp.status_code == 200:
@@ -123,6 +275,7 @@ async def send_whatsapp_message(to_number: str, message: str) -> bool:
     if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_ACCESS_TOKEN:
         log.warning("WhatsApp API bilgileri eksik (PHONE_NUMBER_ID / ACCESS_TOKEN)")
         return False
+    to_norm = normalize_phone(to_number) or to_number
     url = f"https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
@@ -130,14 +283,14 @@ async def send_whatsapp_message(to_number: str, message: str) -> bool:
     }
     data = {
         "messaging_product": "whatsapp",
-        "to": to_number,
+        "to": to_norm,
         "type": "text",
         "text": {"body": message},
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(url, json=data, headers=headers)
-            log.info("WhatsApp API yanıtı: status=%s phone=%s", resp.status_code, mask_phone(to_number))
+            log.info("WhatsApp API yanıtı: status=%s phone=%s", resp.status_code, mask_phone(to_norm))
             return resp.status_code == 200
     except Exception as e:
         log.warning("WhatsApp gönderim hatası: %s", type(e).__name__)
@@ -148,6 +301,7 @@ async def send_interactive_buttons(to_number: str, body_text: str, buttons: list
     if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_ACCESS_TOKEN:
         log.warning("WhatsApp API bilgileri eksik")
         return False
+    to_norm = normalize_phone(to_number) or to_number
     url = f"https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
@@ -155,7 +309,7 @@ async def send_interactive_buttons(to_number: str, body_text: str, buttons: list
     }
     data = {
         "messaging_product": "whatsapp",
-        "to": to_number,
+        "to": to_norm,
         "type": "interactive",
         "interactive": {
             "type": "button",
@@ -166,11 +320,183 @@ async def send_interactive_buttons(to_number: str, body_text: str, buttons: list
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(url, json=data, headers=headers)
-            log.info("Butonlu mesaj API yanıtı: status=%s phone=%s", resp.status_code, mask_phone(to_number))
+            log.info("Butonlu mesaj API yanıtı: status=%s phone=%s", resp.status_code, mask_phone(to_norm))
             return resp.status_code == 200
     except Exception as e:
         log.warning("Butonlu mesaj hatası: %s", type(e).__name__)
         return False
+
+
+def _auth_headers():
+    token = get_token()
+    return bot_headers({"Authorization": f"Bearer {token}"})
+
+
+def _get_with_auth(url, params=None):
+    headers = _auth_headers()
+    with httpx.Client(timeout=10.0) as client:
+        resp = client.get(url, headers=headers, params=params)
+        if resp.status_code == 401:
+            token = get_token(force_refresh=True)
+            headers = bot_headers({"Authorization": f"Bearer {token}"})
+            resp = client.get(url, headers=headers, params=params)
+        return resp
+
+
+def _put_with_auth(url, params=None):
+    headers = _auth_headers()
+    with httpx.Client(timeout=10.0) as client:
+        resp = client.put(url, headers=headers, params=params)
+        if resp.status_code == 401:
+            token = get_token(force_refresh=True)
+            headers = bot_headers({"Authorization": f"Bearer {token}"})
+            resp = client.put(url, headers=headers, params=params)
+        return resp
+
+
+def handle_customer_status_list(phone):
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _get_with_auth(
+            f"{BACKEND_URL}/api/workorders",
+            params={"page": 0, "size": 20, "customerWhatsapp": phone_q},
+        )
+        if resp.status_code != 200:
+            return f"Backend'den veri alınamadı (HTTP {resp.status_code})"
+        orders = resp.json().get("content", [])
+        open_orders = [o for o in orders if o.get("status") in OPEN_CUSTOMER_STATUSES]
+        if not open_orders:
+            return "Açık servis kaydınız bulunmuyor."
+        if len(open_orders) == 1:
+            return format_work_order_detail(open_orders[0])
+        lines = ["Açık servis kayıtlarınız:"]
+        for idx, o in enumerate(open_orders[:8], start=1):
+            desc = (o.get("description") or "")[:30]
+            lines.append(f"{idx}) ID {o['id']} — {o.get('status')} — {desc}")
+        lines.append("Detay için: !durum [ID]")
+        set_conversation(phone, "AWAIT_STATUS_PICK", orders=[o["id"] for o in open_orders[:8]])
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Bağlantı hatası: {type(e).__name__}"
+
+
+def handle_status_by_id(phone, work_order_id):
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _get_with_auth(
+            f"{BACKEND_URL}/api/workorders/{work_order_id}",
+            params={"phone": phone_q},
+        )
+        if resp.status_code == 200:
+            return format_work_order_detail(resp.json())
+        if resp.status_code == 404:
+            return "Bu iş emrine erişim izniniz yok veya iş emri bulunamadı."
+        return f"İş emri bulunamadı (HTTP {resp.status_code})"
+    except Exception as e:
+        return f"Bağlantı hatası: {type(e).__name__}"
+
+
+def handle_warranty_query(phone, serial):
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _get_with_auth(
+            f"{BACKEND_URL}/api/warranty/device/{serial}",
+            params={"phone": phone_q},
+        )
+        if resp.status_code == 200:
+            return format_warranty_reply(resp.json(), serial)
+        if resp.status_code in (404, 403):
+            return "Bu seri numarasıyla cihaz bulunamadı."
+        return f"Sorgu başarısız (HTTP {resp.status_code})"
+    except Exception as e:
+        return f"Bağlantı hatası: {type(e).__name__}"
+
+
+def handle_tech_list(phone):
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _get_with_auth(
+            f"{BACKEND_URL}/api/workorders",
+            params={"page": 0, "size": 10, "technicianWhatsapp": phone_q},
+        )
+        if resp.status_code != 200:
+            return f"Backend'den veri alınamadı (HTTP {resp.status_code})"
+        orders = resp.json().get("content", [])
+        if not orders:
+            return "Size atanmış iş emri bulunmuyor."
+        lines = ["İş Emirleriniz:"]
+        for o in orders[:5]:
+            desc = (o.get("description") or "")[:20]
+            lines.append(f"ID: {o['id']} - {o['status']} - {desc}...")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Bağlantı hatası: {type(e).__name__}"
+
+
+def handle_tech_update_prompt(phone):
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _get_with_auth(
+            f"{BACKEND_URL}/api/workorders",
+            params={"page": 0, "size": 20, "technicianWhatsapp": phone_q},
+        )
+        if resp.status_code != 200:
+            return f"Backend'den veri alınamadı (HTTP {resp.status_code})"
+        orders = [
+            o for o in resp.json().get("content", [])
+            if o.get("status") in OPEN_TECH_STATUSES
+        ]
+        if not orders:
+            return "Güncellenebilir açık iş emriniz yok."
+        lines = ["Atanmış açık iş emirleriniz:"]
+        for o in orders[:8]:
+            desc = (o.get("description") or "")[:25]
+            lines.append(f"ID {o['id']} — {o.get('status')} — {desc}")
+        lines.append("Güncellemek için: !guncelle [ID] [DURUM]")
+        lines.append("Örnek: !guncelle 12 WAITING_PARTS")
+        set_conversation(phone, "AWAIT_TECH_UPDATE")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Bağlantı hatası: {type(e).__name__}"
+
+
+def handle_tech_update(phone, work_order_id, new_status):
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _put_with_auth(
+            f"{BACKEND_URL}/api/workorders/{work_order_id}/status",
+            params={
+                "status": new_status,
+                "channel": "WHATSAPP",
+                "technicianWhatsapp": phone_q,
+            },
+        )
+        if resp.status_code == 200:
+            clear_conversation(phone)
+            return f"İş emri {work_order_id} durumu {new_status} olarak güncellendi."
+        if resp.status_code in (403, 404):
+            return "Bu iş emrini güncelleyemezsiniz veya bulunamadı."
+        return f"Güncellenemedi. Hata: {resp.status_code}"
+    except Exception as e:
+        return f"Bağlantı hatası: {type(e).__name__}"
+
+
+def welcome_menu(role):
+    if role == "TECHNICIAN":
+        buttons = [
+            {"type": "reply", "reply": {"id": "btn_islist", "title": "İş Emirlerim"}},
+            {"type": "reply", "reply": {"id": "btn_guncelle", "title": "Durum Güncelle"}},
+            {"type": "reply", "reply": {"id": "btn_yardim", "title": "Yardım"}},
+        ]
+        body_text = "Hoş geldiniz. Yapmak istediğiniz işlemi seçin:"
+    else:
+        buttons = [
+            {"type": "reply", "reply": {"id": "btn_garanti", "title": "Garanti Sorgula"}},
+            {"type": "reply", "reply": {"id": "btn_durum", "title": "Servis Durumu"}},
+            {"type": "reply", "reply": {"id": "btn_yardim", "title": "Yardım"}},
+        ]
+        body_text = "Hoş geldiniz. Yapmak istediğiniz işlemi seçin:"
+    return body_text, buttons
 
 
 @app.get("/webhook")
@@ -206,17 +532,21 @@ async def webhook(request: Request):
             return JSONResponse(content={"status": "ignored"}, status_code=200)
 
         msg = entry["messages"][0]
-        phone = msg["from"]
+        phone = normalize_phone(msg.get("from")) or msg.get("from")
+        message_id = msg.get("id")
         msg_type = msg.get("type")
         text = None
+        command_summary = None
 
         if msg_type == "text":
             text = msg["text"]["body"].strip()
+            command_summary = text.split()[0][:40] if text else None
             log.info("Mesaj alındı: type=text phone=%s", mask_phone(phone))
         elif msg_type == "interactive":
             interactive = msg["interactive"]
             if interactive["type"] == "button_reply":
                 button_id = interactive["button_reply"]["id"]
+                command_summary = button_id
                 log.info("Buton tıklandı: id=%s phone=%s", button_id, mask_phone(phone))
                 if button_id == "btn_islist":
                     text = "!isliste"
@@ -233,179 +563,106 @@ async def webhook(request: Request):
         else:
             return JSONResponse(content={"status": "ignored"}, status_code=200)
 
+        if not await claim_inbound_message(message_id, phone, msg_type, command_summary):
+            return JSONResponse(content={"status": "duplicate"}, status_code=200)
+
         if not text:
             return JSONResponse(content={"status": "ignored"}, status_code=200)
 
         try:
-            token = get_token()
-        except Exception as e:
-            log.warning("Token hatası: %s", type(e).__name__)
-            # Bir kez yenilemeyi dene
+            get_token()
+        except Exception:
             try:
-                token = get_token(force_refresh=True)
+                get_token(force_refresh=True)
             except Exception:
                 return JSONResponse(content={"status": "error", "reply": "Token alınamadı"}, status_code=500)
 
-        headers = bot_headers({"Authorization": f"Bearer {token}"})
         response_text = ""
+        conv = get_conversation(phone)
 
-        if text.startswith("!yardim"):
+        # Conversation state: garanti seri numarası bekleniyor
+        if conv and conv.get("state") == "AWAIT_SERIAL" and not text.startswith("!"):
+            serial = text.strip()
+            clear_conversation(phone)
+            response_text = handle_warranty_query(phone, serial)
+
+        # Conversation: durum seçimi (numara)
+        elif conv and conv.get("state") == "AWAIT_STATUS_PICK" and not text.startswith("!"):
+            pick = text.strip()
+            order_ids = conv.get("orders") or []
+            if pick.isdigit():
+                idx = int(pick)
+                if 1 <= idx <= len(order_ids):
+                    clear_conversation(phone)
+                    response_text = handle_status_by_id(phone, order_ids[idx - 1])
+                else:
+                    response_text = "Geçersiz seçim. Listeden bir numara seçin veya !durum [ID] yazın."
+            else:
+                response_text = "Geçersiz seçim. Listeden bir numara seçin veya !durum [ID] yazın."
+
+        # Conversation: teknisyen güncelleme devamı
+        elif conv and conv.get("state") == "AWAIT_TECH_UPDATE" and not text.startswith("!"):
+            parts = text.split()
+            if len(parts) >= 2 and parts[0].isdigit():
+                response_text = handle_tech_update(phone, parts[0], parts[1].upper())
+            else:
+                response_text = "Format: [ID] [DURUM]  örn: 12 WAITING_PARTS"
+
+        elif text.startswith("!yardim"):
             role = await get_user_role(phone)
             if role == "UNREGISTERED":
                 response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
             else:
-                if role == "TECHNICIAN":
-                    buttons = [
-                        {"type": "reply", "reply": {"id": "btn_islist", "title": "📋 İş Emirlerim"}},
-                        {"type": "reply", "reply": {"id": "btn_guncelle", "title": "🔄 Durum Güncelle"}},
-                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}},
-                    ]
-                    body_text = "👋 Hoş geldiniz Teknisyen! Yapmak istediğiniz işlemi seçin:"
-                else:
-                    buttons = [
-                        {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
-                        {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
-                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}},
-                    ]
-                    body_text = "👋 Hoş geldiniz Müşteri! Yapmak istediğiniz işlemi seçin:"
-
+                body_text, buttons = welcome_menu(role)
                 await send_interactive_buttons(phone, body_text, buttons)
                 response_text = "Menü gönderildi."
 
         elif text.startswith("!isliste"):
-            with httpx.Client(timeout=10.0) as client:
-                try:
-                    resp = client.get(
-                        f"{BACKEND_URL}/api/workorders?page=0&size=10&technicianWhatsapp={phone}",
-                        headers=headers,
-                    )
-                    if resp.status_code == 401:
-                        token = get_token(force_refresh=True)
-                        headers = bot_headers({"Authorization": f"Bearer {token}"})
-                        resp = client.get(
-                            f"{BACKEND_URL}/api/workorders?page=0&size=10&technicianWhatsapp={phone}",
-                            headers=headers,
-                        )
-                    if resp.status_code == 200:
-                        orders = resp.json().get("content", [])
-                        if orders:
-                            lines = ["📋 İş Emirleriniz:"]
-                            for o in orders[:5]:
-                                desc = (o.get("description") or "")[:20]
-                                lines.append(f"ID: {o['id']} - {o['status']} - {desc}...")
-                            response_text = "\n".join(lines)
-                        else:
-                            response_text = "📭 Size atanmış iş emri bulunmuyor."
-                    else:
-                        response_text = f"❗ Backend'den veri alınamadı (HTTP {resp.status_code})"
-                except Exception as e:
-                    response_text = f"❗ Bağlantı hatası: {type(e).__name__}"
+            response_text = handle_tech_list(phone)
 
         elif text.startswith("!guncelle"):
             parts = text.split()
             if len(parts) >= 3:
-                work_order_id = parts[1]
-                new_status = parts[2].upper()
-                with httpx.Client(timeout=10.0) as client:
-                    try:
-                        resp = client.put(
-                            f"{BACKEND_URL}/api/workorders/{work_order_id}/status",
-                            params={"status": new_status, "channel": "WHATSAPP"},
-                            headers=headers,
-                        )
-                        if resp.status_code == 200:
-                            response_text = f"✅ İş emri {work_order_id} durumu {new_status} olarak güncellendi."
-                        else:
-                            response_text = f"❗ Güncellenemedi. Hata: {resp.status_code}"
-                    except Exception as e:
-                        response_text = f"❗ Bağlantı hatası: {type(e).__name__}"
+                response_text = handle_tech_update(phone, parts[1], parts[2].upper())
             else:
-                response_text = "❗ Yanlış format. Kullanım: !guncelle [ID] [DURUM]"
+                response_text = handle_tech_update_prompt(phone)
 
         elif text.startswith("!garanti"):
             parts = text.split()
             if len(parts) >= 2:
-                serial = parts[1]
-                with httpx.Client(timeout=10.0) as client:
-                    try:
-                        resp = client.get(
-                            f"{BACKEND_URL}/api/warranty/device/{serial}?phone={phone}",
-                            headers=headers,
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            is_under = data.get("isUnderWarranty", False)
-                            response_text = "🔍 **Garanti Sorgulama Sonucu**\n"
-                            response_text += f"Seri No: {serial}\n"
-                            response_text += f"Garanti Durumu: {'✅ Aktif' if is_under else '❌ Süresi Dolmuş'}\n"
-                            if data.get("warrantyRecords"):
-                                for w in data["warrantyRecords"]:
-                                    response_text += f"- {w['warrantyType']}: {w['startDate']} → {w['endDate']}\n"
-                            else:
-                                response_text += "Kayıtlı garanti bulunamadı."
-                        elif resp.status_code in (404, 403):
-                            response_text = "❗ Bu cihaza erişim yetkiniz yok veya cihaz bulunamadı."
-                        else:
-                            response_text = f"❗ Sorgu başarısız (HTTP {resp.status_code})"
-                    except Exception as e:
-                        response_text = f"❗ Bağlantı hatası: {type(e).__name__}"
+                clear_conversation(phone)
+                response_text = handle_warranty_query(phone, parts[1])
             else:
-                response_text = "❗ Kullanım: !garanti [SERI_NO]"
+                set_conversation(phone, "AWAIT_SERIAL")
+                response_text = "Lütfen cihaz seri numarasını yazın."
 
         elif text.startswith("!durum"):
             parts = text.split()
             if len(parts) >= 2:
-                work_order_id = parts[1]
-                with httpx.Client(timeout=10.0) as client:
-                    try:
-                        resp = client.get(
-                            f"{BACKEND_URL}/api/workorders/{work_order_id}?phone={phone}",
-                            headers=headers,
-                        )
-                        if resp.status_code == 200:
-                            wo = resp.json()
-                            response_text = "📋 **İş Emri Durumu**\n"
-                            response_text += f"ID: {wo['id']}\n"
-                            response_text += f"Durum: {wo['status']}\n"
-                            response_text += f"Açıklama: {wo['description']}\n"
-                            if wo.get("technician") and wo["technician"].get("user"):
-                                response_text += f"Teknisyen: {wo['technician']['user']['fullName']}\n"
-                            else:
-                                response_text += "Teknisyen: Atanmamış\n"
-                        elif resp.status_code == 404:
-                            response_text = "❗ Bu iş emrine erişim izniniz yok veya iş emri bulunamadı."
-                        else:
-                            response_text = f"❗ İş emri bulunamadı (HTTP {resp.status_code})"
-                    except Exception as e:
-                        response_text = f"❗ Bağlantı hatası: {type(e).__name__}"
+                clear_conversation(phone)
+                response_text = handle_status_by_id(phone, parts[1])
             else:
-                response_text = "❗ Kullanım: !durum [IS_EMRI_ID]"
+                response_text = handle_customer_status_list(phone)
 
         else:
             role = await get_user_role(phone)
             if role == "UNREGISTERED":
                 response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
             else:
-                if role == "TECHNICIAN":
-                    buttons = [
-                        {"type": "reply", "reply": {"id": "btn_islist", "title": "📋 İş Emirlerim"}},
-                        {"type": "reply", "reply": {"id": "btn_guncelle", "title": "🔄 Durum Güncelle"}},
-                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}},
-                    ]
-                    body_text = "👋 Hoş geldiniz Teknisyen! Yapmak istediğiniz işlemi seçin:"
-                else:
-                    buttons = [
-                        {"type": "reply", "reply": {"id": "btn_garanti", "title": "🔍 Garanti Sorgula"}},
-                        {"type": "reply", "reply": {"id": "btn_durum", "title": "📋 Durum Sorgula"}},
-                        {"type": "reply", "reply": {"id": "btn_yardim", "title": "❓ Yardım"}},
-                    ]
-                    body_text = "👋 Hoş geldiniz Müşteri! Yapmak istediğiniz işlemi seçin:"
-
+                body_text, buttons = welcome_menu(role)
                 await send_interactive_buttons(phone, body_text, buttons)
                 response_text = "Menü gönderildi."
 
         if response_text:
             await send_whatsapp_message(phone, response_text)
+            await log_bot_interaction(
+                direction="OUTBOUND",
+                phone=phone,
+                messageType="text",
+                command=command_summary,
+                status="SENT",
+                messageSummary=(response_text or "")[:120],
+            )
 
         return JSONResponse(content={"status": "received"}, status_code=200)
 
@@ -425,7 +682,8 @@ async def send_notification(request: Request):
         message = data.get("message")
         if not phone or not message:
             return JSONResponse(content={"status": "missing fields"}, status_code=400)
-        success = await send_whatsapp_message(phone, message)
+        phone_norm = normalize_phone(phone) or phone
+        success = await send_whatsapp_message(phone_norm, message)
         return JSONResponse(content={"status": "sent" if success else "failed"}, status_code=200)
     except Exception as e:
         log.warning("Bildirim hatası: %s", type(e).__name__)

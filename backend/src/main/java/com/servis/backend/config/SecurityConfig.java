@@ -42,6 +42,7 @@ public class SecurityConfig {
                 // WhatsApp bot lookup (yalnızca bu özel path'ler)
                 .requestMatchers("/api/customers/by-whatsapp/**").permitAll()
                 .requestMatchers("/api/technicians/by-whatsapp/**").permitAll()
+                .requestMatchers("/api/bot/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

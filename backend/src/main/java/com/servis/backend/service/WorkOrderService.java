@@ -1,5 +1,6 @@
 package com.servis.backend.service;
 
+import com.servis.backend.dto.WhatsAppNotificationRequest;
 import com.servis.backend.entity.*;
 import com.servis.backend.repository.CustomerRepository;
 import com.servis.backend.repository.DeviceRepository;
@@ -7,6 +8,9 @@ import com.servis.backend.repository.RegionRepository;
 import com.servis.backend.repository.TechnicianRepository;
 import com.servis.backend.repository.WorkOrderRepository;
 import com.servis.backend.repository.WorkOrderStatusHistoryRepository;
+import com.servis.backend.util.PhoneNormalizer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +26,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class WorkOrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkOrderService.class);
 
     @Autowired
     private WorkOrderRepository workOrderRepository;
@@ -44,7 +50,6 @@ public class WorkOrderService {
     @Autowired
     private WhatsAppNotificationClient whatsAppNotificationClient;
 
-    // === LİSTELEME (Sayfalama Destekli) ===
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
         return workOrderRepository.findAll(pageable);
     }
@@ -55,6 +60,10 @@ public class WorkOrderService {
 
     public Page<WorkOrder> getWorkOrdersByTechnicianId(Long technicianId, Pageable pageable) {
         return workOrderRepository.findByTechnicianId(technicianId, pageable);
+    }
+
+    public Page<WorkOrder> getWorkOrdersByCustomerId(Long customerId, Pageable pageable) {
+        return workOrderRepository.findByCustomerId(customerId, pageable);
     }
 
     public List<WorkOrder> getAllWorkOrders() {
@@ -127,25 +136,31 @@ public class WorkOrderService {
         toSave.setStatus(WorkOrderStatus.OPEN.name());
 
         WorkOrder saved = workOrderRepository.save(toSave);
-        saveHistory(saved, null, WorkOrderStatus.OPEN.name(), "İş emri oluşturuldu", "WEB");
+        saveHistory(saved, null, null, WorkOrderStatus.OPEN.name(), "İş emri oluşturuldu", "WEB");
 
-        // WhatsApp bildirimi — URL/API key yoksa veya bot kapalıysa create yine başarılı
-        String customerPhone = saved.getCustomer().getWhatsappNumber();
-        if (customerPhone != null && !customerPhone.isEmpty()) {
-            String message = String.format(
-                    "Arıza kaydınız alındı. İş emri numaranız: %d\nDurumunuzu öğrenmek için: !durum %d\nGaranti sorgulamak için: !garanti %s",
-                    saved.getId(), saved.getId(), saved.getDevice().getSerialNumber()
-            );
-            whatsAppNotificationClient.sendNotification(customerPhone, message);
-        }
+        notifyWorkOrderCreated(saved);
 
         return saved;
     }
 
     @Transactional
     public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel) {
+        return updateStatus(workOrderId, newStatus, changedBy, channel, null);
+    }
+
+    @Transactional
+    public WorkOrder updateStatus(Long workOrderId, String newStatus, User changedBy, String channel,
+                                  String technicianWhatsapp) {
         WorkOrder workOrder = getWorkOrderById(workOrderId);
         String oldStatus = workOrder.getStatus();
+
+        if (technicianWhatsapp != null && !technicianWhatsapp.isBlank()) {
+            assertTechnicianOwnsWorkOrder(workOrder, technicianWhatsapp);
+        }
+
+        if (oldStatus != null && oldStatus.equals(newStatus)) {
+            return workOrder;
+        }
 
         validateTransition(oldStatus, newStatus);
 
@@ -158,7 +173,8 @@ public class WorkOrderService {
         }
 
         WorkOrder updated = workOrderRepository.save(workOrder);
-        saveHistory(updated, changedBy, newStatus, oldStatus + " → " + newStatus, channel);
+        saveHistory(updated, changedBy, oldStatus, newStatus, oldStatus + " → " + newStatus, channel);
+        notifyStatusChanged(updated, oldStatus, newStatus);
         return updated;
     }
 
@@ -173,17 +189,168 @@ public class WorkOrderService {
             throw new RuntimeException("Kapalı iş emrine teknisyen atanamaz");
         }
 
+        Long previousTechId = workOrder.getTechnician() != null ? workOrder.getTechnician().getId() : null;
+        boolean technicianChanged = previousTechId == null || !previousTechId.equals(technicianId);
+
+        if (!technicianChanged && WorkOrderStatus.ASSIGNED.name().equals(workOrder.getStatus())) {
+            return workOrder;
+        }
+
+        String oldStatus = workOrder.getStatus();
         workOrder.setTechnician(technician);
         workOrder.setStatus(WorkOrderStatus.ASSIGNED.name());
         workOrder.setAssignedAt(LocalDateTime.now());
 
         WorkOrder saved = workOrderRepository.save(workOrder);
-        saveHistory(saved, changedBy, WorkOrderStatus.ASSIGNED.name(), "Teknisyen atandı: " + technician.getId(), "WEB");
+        saveHistory(saved, changedBy, oldStatus, WorkOrderStatus.ASSIGNED.name(),
+                "Teknisyen atandı", "WEB");
 
-        technician.setCurrentWorkload(technician.getCurrentWorkload() + 1);
-        technicianRepository.save(technician);
+        if (technicianChanged) {
+            technician.setCurrentWorkload(technician.getCurrentWorkload() + 1);
+            technicianRepository.save(technician);
+            notifyTechnicianAssigned(saved, technician);
+        }
 
         return saved;
+    }
+
+    /**
+     * Müşteri bildirim telefonu: whatsappNumber → phone fallback; ikisi de boşsa null.
+     */
+    static String resolveCustomerNotifyPhone(Customer customer) {
+        if (customer == null) {
+            return null;
+        }
+        if (customer.getWhatsappNumber() != null && !customer.getWhatsappNumber().isBlank()) {
+            String normalized = PhoneNormalizer.normalize(customer.getWhatsappNumber());
+            return normalized != null ? normalized : customer.getWhatsappNumber().trim();
+        }
+        if (customer.getPhone() != null && !customer.getPhone().isBlank()) {
+            String normalized = PhoneNormalizer.normalize(customer.getPhone());
+            return normalized != null ? normalized : customer.getPhone().trim();
+        }
+        return null;
+    }
+
+    private void notifyWorkOrderCreated(WorkOrder saved) {
+        try {
+            String phone = resolveCustomerNotifyPhone(saved.getCustomer());
+            if (phone == null) {
+                log.warn("WhatsApp create bildirimi atlandı: müşteri telefonu yok (wo={})", saved.getId());
+                return;
+            }
+            StringBuilder message = new StringBuilder();
+            message.append("Servis kaydınız oluşturuldu. İş emri numaranız: ").append(saved.getId()).append(".");
+            if (saved.getDevice() != null && saved.getDevice().getModel() != null) {
+                String brand = saved.getDevice().getModel().getBrand() != null
+                        ? saved.getDevice().getModel().getBrand().getName()
+                        : null;
+                String model = saved.getDevice().getModel().getName();
+                if (brand != null || model != null) {
+                    message.append(" Cihaz: ");
+                    if (brand != null) {
+                        message.append(brand);
+                        if (model != null) {
+                            message.append(" ");
+                        }
+                    }
+                    if (model != null) {
+                        message.append(model);
+                    }
+                    message.append(".");
+                }
+            }
+
+            WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+            req.setPhone(phone);
+            req.setMessage(message.toString());
+            req.setEventType(WhatsAppNotificationRequest.EVENT_WORK_ORDER_CREATED);
+            req.setWorkOrderId(saved.getId());
+            req.setTargetStatus(WorkOrderStatus.OPEN.name());
+            req.setEventKey(WorkOrderStatus.OPEN.name());
+            whatsAppNotificationClient.sendNotification(req);
+        } catch (Exception e) {
+            log.warn("WhatsApp create bildirimi başarısız (wo={}): {}", saved.getId(), e.getClass().getSimpleName());
+        }
+    }
+
+    private void notifyTechnicianAssigned(WorkOrder saved, Technician technician) {
+        try {
+            String phone = resolveCustomerNotifyPhone(saved.getCustomer());
+            if (phone == null) {
+                log.warn("WhatsApp assign bildirimi atlandı: müşteri telefonu yok (wo={})", saved.getId());
+                return;
+            }
+            String techName = technician.getUser() != null && technician.getUser().getFullName() != null
+                    ? technician.getUser().getFullName()
+                    : "teknisyen";
+            WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+            req.setPhone(phone);
+            req.setMessage("Cihazınız için teknisyen atandı: " + techName + ".");
+            req.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_ASSIGNED);
+            req.setWorkOrderId(saved.getId());
+            req.setTechnicianId(technician.getId());
+            req.setTechnicianName(techName);
+            req.setEventKey("tech:" + technician.getId());
+            whatsAppNotificationClient.sendNotification(req);
+        } catch (Exception e) {
+            log.warn("WhatsApp assign bildirimi başarısız (wo={}): {}", saved.getId(), e.getClass().getSimpleName());
+        }
+    }
+
+    private void notifyStatusChanged(WorkOrder updated, String oldStatus, String newStatus) {
+        try {
+            if (oldStatus != null && oldStatus.equals(newStatus)) {
+                return;
+            }
+            String phone = resolveCustomerNotifyPhone(updated.getCustomer());
+            if (phone == null) {
+                log.warn("WhatsApp status bildirimi atlandı: müşteri telefonu yok (wo={})", updated.getId());
+                return;
+            }
+            String message = statusChangeMessage(newStatus);
+            if (message == null) {
+                return;
+            }
+            WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+            req.setPhone(phone);
+            req.setMessage(message);
+            req.setEventType(WhatsAppNotificationRequest.EVENT_STATUS_CHANGED);
+            req.setWorkOrderId(updated.getId());
+            req.setTargetStatus(newStatus);
+            req.setEventKey(newStatus);
+            whatsAppNotificationClient.sendNotification(req);
+        } catch (Exception e) {
+            log.warn("WhatsApp status bildirimi başarısız (wo={}): {}", updated.getId(), e.getClass().getSimpleName());
+        }
+    }
+
+    static String statusChangeMessage(String status) {
+        if (status == null) {
+            return null;
+        }
+        return switch (status) {
+            case "OPEN" -> "Servis kaydınız açıldı.";
+            case "ASSIGNED" -> "Servis kaydınıza teknisyen atandı.";
+            case "IN_PROGRESS" -> "Cihazınızın inceleme ve onarım süreci başladı.";
+            case "WAITING_PARTS" -> "Cihazınız için parça bekleniyor.";
+            case "RESOLVED" -> "Cihazınızın işlemleri tamamlandı.";
+            case "CLOSED" -> "Servis kaydınız kapatıldı. Cihazınız teslimata hazır olabilir.";
+            case "CANCELLED" -> "Servis kaydınız iptal edildi.";
+            default -> null;
+        };
+    }
+
+    void assertTechnicianOwnsWorkOrder(WorkOrder workOrder, String technicianWhatsapp) {
+        Technician assigned = workOrder.getTechnician();
+        if (assigned == null || assigned.getWhatsappNumber() == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Bu iş emri size atanmamış.");
+        }
+        if (!PhoneNormalizer.matches(technicianWhatsapp, assigned.getWhatsappNumber())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Bu iş emri size atanmamış.");
+        }
     }
 
     private void validateTransition(String oldStatus, String newStatus) {
@@ -209,11 +376,12 @@ public class WorkOrderService {
         }
     }
 
-    private void saveHistory(WorkOrder workOrder, User changedBy, String newStatus, String description, String channel) {
+    private void saveHistory(WorkOrder workOrder, User changedBy, String oldStatus, String newStatus,
+                             String description, String channel) {
         WorkOrderStatusHistory history = new WorkOrderStatusHistory();
         history.setWorkOrder(workOrder);
         history.setChangedBy(changedBy);
-        history.setOldStatus(workOrder.getStatus());
+        history.setOldStatus(oldStatus);
         history.setNewStatus(newStatus);
         history.setDescription(description);
         history.setChannel(channel);

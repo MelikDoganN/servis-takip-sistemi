@@ -19,5 +19,7 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrder, Long> {
     List<WorkOrder> findByDeviceId(Long deviceId);
     Page<WorkOrder> findByTechnicianId(Long technicianId, Pageable pageable);
 
+    Page<WorkOrder> findByCustomerId(Long customerId, Pageable pageable);
+
     boolean existsByDeviceId(Long deviceId);
 }

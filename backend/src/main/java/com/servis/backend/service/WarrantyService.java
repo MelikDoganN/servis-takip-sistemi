@@ -7,6 +7,7 @@ import com.servis.backend.entity.WorkOrder;
 import com.servis.backend.repository.DeviceRepository;
 import com.servis.backend.repository.WarrantyRecordRepository;
 import com.servis.backend.repository.WorkOrderRepository;
+import com.servis.backend.util.PhoneNormalizer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -130,6 +131,41 @@ public class WarrantyService {
                         "Bu seri numarasıyla cihaz bulunamadı."
                 ));
 
+        return toDeviceInfoDto(device);
+    }
+
+    /**
+     * Bot müşteri sorgusu: cihaz sahibinin telefonu ile eşleşmezse güvenli 404.
+     */
+    @Transactional(readOnly = true)
+    public WarrantyDeviceInfoDto getDeviceInfoBySerialNumberForCustomer(String serialNumber, String phone) {
+        if (serialNumber == null || serialNumber.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seri numarası zorunludur");
+        }
+        if (phone == null || phone.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Telefon zorunludur");
+        }
+
+        Device device = deviceRepository.findBySerialNumber(serialNumber.trim())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Bu seri numarasıyla cihaz bulunamadı."
+                ));
+
+        if (device.getCustomer() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Bu seri numarasıyla cihaz bulunamadı.");
+        }
+
+        boolean owns = PhoneNormalizer.matches(phone, device.getCustomer().getWhatsappNumber())
+                || PhoneNormalizer.matches(phone, device.getCustomer().getPhone());
+        if (!owns) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Bu seri numarasıyla cihaz bulunamadı.");
+        }
+
+        return toDeviceInfoDto(device);
+    }
+
+    private WarrantyDeviceInfoDto toDeviceInfoDto(Device device) {
         WarrantyDeviceInfoDto dto = new WarrantyDeviceInfoDto();
         dto.setSerialNumber(device.getSerialNumber());
 

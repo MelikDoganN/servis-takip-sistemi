@@ -35,7 +35,13 @@ public class WarrantyController {
 
     @GetMapping("/device/{serialNumber}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CENTER_OPERATOR', 'REGION_MANAGER', 'TECHNICIAN')")
-    public ResponseEntity<WarrantyDeviceInfoDto> getDeviceBySerial(@PathVariable String serialNumber) {
+    public ResponseEntity<WarrantyDeviceInfoDto> getDeviceBySerial(
+            @PathVariable String serialNumber,
+            @RequestParam(required = false) String phone) {
+        if (phone != null && !phone.isBlank()) {
+            return ResponseEntity.ok(
+                    warrantyService.getDeviceInfoBySerialNumberForCustomer(serialNumber, phone));
+        }
         return ResponseEntity.ok(warrantyService.getDeviceInfoBySerialNumber(serialNumber));
     }
 }

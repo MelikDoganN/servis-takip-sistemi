@@ -5,12 +5,14 @@ import com.servis.backend.dto.UpdateCustomerRequest;
 import com.servis.backend.entity.Customer;
 import com.servis.backend.repository.CustomerRepository;
 import com.servis.backend.repository.DeviceRepository;
+import com.servis.backend.util.PhoneNormalizer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class CustomerService {
@@ -66,9 +68,30 @@ public class CustomerService {
     }
 
     public Customer findByWhatsappNumber(String whatsappNumber) {
-        return customerRepository.findByWhatsappNumber(whatsappNumber)
+        return findByWhatsappNumberOptional(whatsappNumber)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Müşteri bulunamadı: " + whatsappNumber));
+                        HttpStatus.NOT_FOUND, "Müşteri bulunamadı"));
+    }
+
+    /**
+     * WhatsApp/telefon varyantlarıyla müşteri arar (canonical + ham formatlar).
+     * DB kayıtlarını yeniden yazmaz.
+     */
+    public Optional<Customer> findByWhatsappNumberOptional(String whatsappNumber) {
+        if (whatsappNumber == null || whatsappNumber.isBlank()) {
+            return Optional.empty();
+        }
+        for (String variant : PhoneNormalizer.searchVariants(whatsappNumber)) {
+            Optional<Customer> byWa = customerRepository.findByWhatsappNumber(variant);
+            if (byWa.isPresent()) {
+                return byWa;
+            }
+            Optional<Customer> byPhone = customerRepository.findByPhone(variant);
+            if (byPhone.isPresent()) {
+                return byPhone;
+            }
+        }
+        return Optional.empty();
     }
 
     private void assertPhoneAvailable(String phone, Long excludeId) {

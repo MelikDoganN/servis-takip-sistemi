@@ -139,4 +139,19 @@ class BotLookupApiTest {
         org.hamcrest.MatcherAssert.assertThat(body, not(containsString("password")));
         org.hamcrest.MatcherAssert.assertThat(body, not(containsString("bot.tech@test.com")));
     }
+
+    @Test
+    void customerByWhatsapp_NormalizedVariant_FindsSameCustomer() throws Exception {
+        mockMvc.perform(get("/api/customers/by-whatsapp/05551002003")
+                        .header("X-Bot-Api-Key", API_KEY)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Bot Müşteri"));
+
+        mockMvc.perform(get("/api/customers/by-whatsapp/5551002003")
+                        .header("X-Bot-Api-Key", API_KEY)
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.whatsappNumber").value("905551002003"));
+    }
 }

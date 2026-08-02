@@ -85,7 +85,7 @@ class PostgresFlywayIntegrationTest {
                 "SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank"
         );
 
-        assertTrue(history.size() >= 5, "Expected at least V1-V5 migrations, got: " + history.size());
+        assertTrue(history.size() >= 6, "Expected at least V1-V6 migrations, got: " + history.size());
 
         Integer roles = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
         assertEquals(5, roles);
@@ -161,5 +161,21 @@ class PostgresFlywayIntegrationTest {
                         + "WHERE table_schema = 'public' AND table_name = 'activity_logs'",
                 Integer.class);
         assertEquals(1, count);
+    }
+
+    @Test
+    void notificationDedupAndBotLogColumnsExist() {
+        Integer dedup = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' AND table_name = 'notification_dedup'",
+                Integer.class);
+        assertEquals(1, dedup);
+
+        Integer extCol = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' AND table_name = 'bot_interaction_logs' "
+                        + "AND column_name = 'external_message_id'",
+                Integer.class);
+        assertEquals(1, extCol);
     }
 }
