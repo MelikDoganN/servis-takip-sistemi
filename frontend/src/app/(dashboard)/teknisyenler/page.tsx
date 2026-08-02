@@ -218,16 +218,24 @@ export default function TeknisyenlerPage() {
         setActionError("Şifre en az 6 karakter olmalıdır");
         return;
       }
+      if (!form.regionId.trim()) {
+        setActionError("Bölge seçimi zorunludur");
+        return;
+      }
+      if (!form.whatsappNumber.trim()) {
+        setActionError("WhatsApp numarası zorunludur");
+        return;
+      }
 
       const payload: CreateTechnicianRequest = {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         password: form.password,
         phone: form.phone.trim() || undefined,
-        whatsappNumber: form.whatsappNumber.trim() || undefined,
+        whatsappNumber: form.whatsappNumber.trim(),
         currentWorkload: Number(form.currentWorkload) || 0,
         isAvailable: form.isAvailable,
-        regionId: form.regionId.trim() ? Number(form.regionId) : null,
+        regionId: Number(form.regionId),
       };
 
       setActionLoading(true);
@@ -545,8 +553,9 @@ export default function TeknisyenlerPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, regionId: e.target.value }))
               }
+              required
             >
-              <option value="">Bölge seçin (opsiyonel)…</option>
+              <option value="">Bölge seçin…</option>
               {regions.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -561,6 +570,7 @@ export default function TeknisyenlerPage() {
                 setForm((f) => ({ ...f, whatsappNumber: e.target.value }))
               }
               placeholder="WhatsApp numarası"
+              required
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

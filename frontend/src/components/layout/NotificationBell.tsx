@@ -7,13 +7,12 @@ import {
   Bell,
   CheckCheck,
   ClipboardList,
-  ShieldAlert,
 } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { workOrderService } from "@/services/workOrderService";
-import { deviceService } from "@/services/deviceService";
+import { EmptyState } from "@/components/ui/EmptyState";
 
-type NotificationType = "new-order" | "open-order" | "warranty" | "system";
+type NotificationType = "new-order" | "open-order";
 
 interface AppNotification {
   id: string;
@@ -26,10 +25,6 @@ interface AppNotification {
 
 const READ_STORAGE_KEY = "servis-takip:read-notifications";
 const OPEN_ORDER_STALE_HOURS = 48;
-/** Gerçek garanti bitiş tarihi backend'den toplu alınamadığı için
- * satın alma tarihinden itibaren 24 ay standart garanti varsayılıyor (tahmini). */
-const ESTIMATED_WARRANTY_MONTHS = 24;
-const WARRANTY_WARNING_DAYS = 30;
 
 function loadReadIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -58,28 +53,26 @@ const TYPE_META: Record<
     icon: <AlertTriangle className="h-4 w-4" />,
     iconBg: "bg-amber-50 text-amber-600",
   },
-  warranty: {
-    icon: <ShieldAlert className="h-4 w-4" />,
-    iconBg: "bg-orange-50 text-orange-600",
-  },
-  system: {
-    icon: <Bell className="h-4 w-4" />,
-    iconBg: "bg-slate-100 text-slate-600",
-  },
 };
 
+/**
+ * Backend bildirim listesi endpoint'i yok.
+ * Yalnızca gerçek iş emri kayıtlarından türetilmiş uyarılar gösterilir
+ * (tahmini garanti / sahte bildirim yok).
+ */
 export function NotificationBell() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds());
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
+    setError(false);
     const items: AppNotification[] = [];
-    let hadError = false;
 
     try {
       const workOrders = await workOrderService.getAll(200);
@@ -119,60 +112,18 @@ export function NotificationBell() {
             href: "/is-emirleri",
           })
         );
+
+      items.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setNotifications(items);
     } catch {
-      hadError = true;
+      setError(true);
+      setNotifications([]);
+    } finally {
+      setLoading(false);
     }
-
-    try {
-      const devices = await deviceService.getAll(200);
-      const now = Date.now();
-      const warningThreshold = now + WARRANTY_WARNING_DAYS * 24 * 3600 * 1000;
-
-      devices
-        .filter((d) => d.purchaseDate)
-        .map((d) => {
-          const purchase = new Date(d.purchaseDate as string);
-          const estimatedEnd = new Date(purchase);
-          estimatedEnd.setMonth(
-            estimatedEnd.getMonth() + ESTIMATED_WARRANTY_MONTHS
-          );
-          return { device: d, estimatedEnd };
-        })
-        .filter(
-          ({ estimatedEnd }) =>
-            estimatedEnd.getTime() >= now &&
-            estimatedEnd.getTime() <= warningThreshold
-        )
-        .slice(0, 5)
-        .forEach(({ device, estimatedEnd }) =>
-          items.push({
-            id: `warranty-${device.id}`,
-            type: "warranty",
-            title: "Garanti süresi yaklaşıyor (tahmini)",
-            message: `${device.serialNumber} — tahmini bitiş ${estimatedEnd.toLocaleDateString("tr-TR")}`,
-            createdAt: device.purchaseDate as string,
-            href: "/garanti-sorgulama",
-          })
-        );
-    } catch {
-      hadError = true;
-    }
-
-    if (hadError) {
-      items.push({
-        id: "system-fetch-error",
-        type: "system",
-        title: "Sistem uyarısı",
-        message: "Bazı bildirim kaynakları yüklenemedi",
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    items.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-    setNotifications(items);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -223,7 +174,7 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-navy"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
         aria-label="Bildirimler"
       >
         <Bell className="h-4 w-4" />
@@ -237,7 +188,12 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-full z-30 mt-2 w-[24rem] max-w-[90vw] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-elevated animate-fade-in">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-800">Bildirimler</p>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Bildirimler</p>
+              <p className="text-[10px] text-slate-400">
+                İş emri kayıtlarından türetilir
+              </p>
+            </div>
             {notifications.length > 0 && (
               <button
                 type="button"
@@ -255,10 +211,18 @@ export function NotificationBell() {
               <div className="px-4 py-6 text-center text-sm text-slate-500">
                 Yükleniyor…
               </div>
+            ) : error ? (
+              <EmptyState
+                className="py-8"
+                title="Bildirimler yüklenemedi"
+                description="İş emri verilerine erişilemedi. Daha sonra tekrar deneyin."
+              />
             ) : notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-slate-500">
-                Yeni bildirim yok
-              </div>
+              <EmptyState
+                className="py-8"
+                title="Yeni bildirim yok"
+                description="Açık veya yeni iş emri uyarısı bulunmuyor."
+              />
             ) : (
               <ul className="divide-y divide-slate-100">
                 {notifications.map((n) => {

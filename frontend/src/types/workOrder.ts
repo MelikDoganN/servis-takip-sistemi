@@ -31,6 +31,17 @@ export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   CLOSED: "Kapalı",
 };
 
+export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
+  LOW: "Düşük",
+  MEDIUM: "Orta",
+  HIGH: "Yüksek",
+};
+
+export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
+  WARRANTY: "Garanti",
+  PAID: "Ücretli",
+};
+
 /** Backend state machine geçişleri */
 export const WORK_ORDER_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   OPEN: ["ASSIGNED", "CLOSED"],

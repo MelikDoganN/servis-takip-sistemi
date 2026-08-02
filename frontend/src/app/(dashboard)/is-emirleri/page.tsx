@@ -46,6 +46,8 @@ import {
   KanbanBoard,
   ServiceType,
   WORK_ORDER_STATUS_LABELS,
+  WORK_ORDER_PRIORITY_LABELS,
+  SERVICE_TYPE_LABELS,
   WORK_ORDER_STATUSES,
   WORK_ORDER_TRANSITIONS,
   WorkOrder,
@@ -513,7 +515,11 @@ export default function IsEmirleriPage() {
                             {WORK_ORDER_STATUS_LABELS[wo.status] ?? wo.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>{wo.priority || "—"}</TableCell>
+                        <TableCell>
+                          {wo.priority
+                            ? WORK_ORDER_PRIORITY_LABELS[wo.priority] ?? wo.priority
+                            : "—"}
+                        </TableCell>
                         <TableCell>{formatDateTime(wo.createdAt)}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
@@ -673,7 +679,10 @@ export default function IsEmirleriPage() {
                             </p>
                             <p className="mt-1 truncate text-xs text-slate-400">
                               {wo.technician?.user?.fullName || "Atanmadı"} ·{" "}
-                              {wo.priority || "—"}
+                              {wo.priority
+                                ? WORK_ORDER_PRIORITY_LABELS[wo.priority] ??
+                                  wo.priority
+                                : "—"}
                             </p>
                           </button>
                         ))
@@ -709,6 +718,7 @@ export default function IsEmirleriPage() {
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.fullName}
+                {c.phone ? ` — ${c.phone}` : ""}
               </option>
             ))}
           </Select>
@@ -746,7 +756,7 @@ export default function IsEmirleriPage() {
             >
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
-                  {p}
+                  {WORK_ORDER_PRIORITY_LABELS[p]}
                 </option>
               ))}
             </Select>
@@ -757,7 +767,7 @@ export default function IsEmirleriPage() {
             >
               {SERVICE_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t === "WARRANTY" ? "Garanti" : "Ücretli"}
+                  {SERVICE_TYPE_LABELS[t]}
                 </option>
               ))}
             </Select>
@@ -815,8 +825,15 @@ export default function IsEmirleriPage() {
                   label: "Oluşturan",
                   value: selected.createdBy?.fullName || "—",
                 },
-                { label: "Öncelik", value: selected.priority || "—" },
-                { label: "Servis Tipi", value: selected.serviceType || "—" },
+                { label: "Öncelik", value: selected.priority
+                  ? WORK_ORDER_PRIORITY_LABELS[selected.priority] ?? selected.priority
+                  : "—" },
+                {
+                  label: "Servis Tipi",
+                  value: selected.serviceType
+                    ? SERVICE_TYPE_LABELS[selected.serviceType] ?? selected.serviceType
+                    : "—",
+                },
                 {
                   label: "Açıklama",
                   value: selected.description || "—",
@@ -1065,9 +1082,13 @@ export default function IsEmirleriPage() {
                 >
                   {availableTechnicians.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.user?.fullName || "İsimsiz"} (yük:{" "}
-                      {t.currentWorkload ?? 0}
-                      {t.region?.name ? `, ${t.region.name}` : ""})
+                      {t.user?.fullName || "İsimsiz"}
+                      {t.user?.phone || t.whatsappNumber
+                        ? ` — ${t.user?.phone || t.whatsappNumber}`
+                        : ""}
+                      {` (yük: ${t.currentWorkload ?? 0}`}
+                      {t.region?.name ? `, ${t.region.name}` : ""}
+                      {")"}
                     </option>
                   ))}
                 </Select>

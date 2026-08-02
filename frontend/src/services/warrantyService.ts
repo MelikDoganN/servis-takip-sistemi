@@ -1,5 +1,5 @@
 import { apiClient } from "./api";
-import { WarrantyRecord, WarrantyType } from "@/types/warranty";
+import { WarrantyDeviceInfo, WarrantyRecord, WarrantyType } from "@/types/warranty";
 
 export const warrantyService = {
   check(deviceId: number, type: WarrantyType): Promise<boolean> {
@@ -10,5 +10,11 @@ export const warrantyService = {
     return apiClient<WarrantyRecord>(`/api/warranty/generate/${deviceId}/${type}`, {
       method: "POST",
     });
+  },
+
+  getBySerial(serialNumber: string): Promise<WarrantyDeviceInfo> {
+    return apiClient<WarrantyDeviceInfo>(
+      `/api/warranty/device/${encodeURIComponent(serialNumber.trim())}`
+    );
   },
 };

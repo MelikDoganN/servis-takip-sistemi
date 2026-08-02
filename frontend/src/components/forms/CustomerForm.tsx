@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { CreateCustomerRequest, Customer } from "@/types/customer";
 
 interface CustomerFormProps {
@@ -14,6 +15,7 @@ interface CustomerFormProps {
 
 interface FormErrors {
   fullName?: string;
+  phone?: string;
 }
 
 export function CustomerForm({
@@ -44,6 +46,9 @@ export function CustomerForm({
     if (!fullName.trim()) {
       newErrors.fullName = "Ad soyad boş olamaz";
     }
+    if (!phone.trim()) {
+      newErrors.phone = "Telefon zorunludur";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -57,7 +62,7 @@ export function CustomerForm({
     try {
       await onSubmit({
         fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
+        phone: phone.trim(),
         whatsappNumber: whatsappNumber.trim() || undefined,
         email: email.trim() || undefined,
         address: address.trim() || undefined,
@@ -71,32 +76,47 @@ export function CustomerForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <Input
         label="Ad Soyad"
         value={fullName}
         onChange={(e) => setFullName(e.target.value)}
         error={errors.fullName}
         required
+        autoComplete="name"
       />
-      <Input label="Telefon" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <Input
+        label="Telefon"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        error={errors.phone}
+        required
+        autoComplete="tel"
+      />
       <Input
         label="WhatsApp Numarası"
         value={whatsappNumber}
         onChange={(e) => setWhatsappNumber(e.target.value)}
+        autoComplete="tel"
       />
       <Input
         label="E-posta"
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        autoComplete="email"
       />
-      <Input label="Adres" value={address} onChange={(e) => setAddress(e.target.value)} />
+      <Input
+        label="Adres"
+        value={address}
+        onChange={(e) => setAddress(e.target.value)}
+        autoComplete="street-address"
+      />
 
-      {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+      {submitError && <ErrorMessage message={submitError} />}
 
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
           İptal
         </Button>
         <Button type="submit" loading={loading}>

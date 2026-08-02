@@ -1,34 +1,40 @@
 import { cn } from "@/lib/utils";
+import { EmptyState } from "./EmptyState";
 import { BarChart3 } from "lucide-react";
 
 interface ChartPlaceholderProps {
   title: string;
   height?: string;
   className?: string;
+  description?: string;
 }
 
-export function ChartPlaceholder({ title, height = "h-44", className }: ChartPlaceholderProps) {
+/** Sahte grafik çizmez — gerçek veri yoksa boş durum gösterir. */
+export function ChartPlaceholder({
+  title,
+  height = "h-44",
+  className,
+  description = "Bu rapor için henüz yeterli veri bulunmuyor.",
+}: ChartPlaceholderProps) {
   return (
-    <div className={cn("surface-card flex h-full flex-col p-5", className)}>
-      <div className="flex items-center gap-2">
-        <BarChart3 className="h-4 w-4 text-accent" />
+    <div
+      className={cn(
+        "surface-card flex flex-col overflow-hidden",
+        height,
+        className
+      )}
+    >
+      <div className="border-b border-slate-100 px-5 py-3">
         <h3 className="text-sm font-semibold text-navy">{title}</h3>
       </div>
-      <div
-        className={cn(
-          "mt-4 flex flex-1 items-end justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-4 pb-3 pt-6",
-          height
-        )}
-      >
-        {[40, 65, 45, 80, 55, 70, 50].map((h, i) => (
-          <div
-            key={i}
-            className="w-full rounded-t bg-accent/70 transition-opacity hover:opacity-90"
-            style={{ height: `${h}%` }}
-          />
-        ))}
+      <div className="flex flex-1 items-center justify-center">
+        <EmptyState
+          className="py-6"
+          icon={<BarChart3 className="h-5 w-5" />}
+          title={description}
+          description="Grafik yalnızca gerçek backend verisiyle gösterilir."
+        />
       </div>
-      <p className="mt-3 text-xs text-slate-400">Özet görünüm — detay için Raporlar</p>
     </div>
   );
 }

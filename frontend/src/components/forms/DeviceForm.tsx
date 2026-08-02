@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { CreateDeviceRequest, Device } from "@/types/device";
 import { Customer } from "@/types/customer";
 import { Brand } from "@/types/brand";
@@ -99,6 +100,7 @@ export function DeviceForm({
     let cancelled = false;
     (async () => {
       setModelsLoading(true);
+      setLookupError("");
       try {
         const data = await deviceModelService.getAll(Number(brandId));
         if (!cancelled) {
@@ -124,7 +126,7 @@ export function DeviceForm({
     if (!customerId) newErrors.customerId = "Müşteri seçilmelidir";
     if (!brandId) newErrors.brandId = "Marka seçilmelidir";
     if (!modelId) newErrors.modelId = "Model seçilmelidir";
-    if (!serialNumber.trim()) newErrors.serialNumber = "Seri numarası boş olamaz";
+    if (!serialNumber.trim()) newErrors.serialNumber = "Seri numarası zorunludur";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -152,19 +154,21 @@ export function DeviceForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {lookupError && <p className="text-sm text-red-600">{lookupError}</p>}
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {lookupError && <ErrorMessage message={lookupError} />}
 
       <Select
         label="Müşteri"
         value={customerId}
         onChange={(e) => setCustomerId(e.target.value)}
         error={errors.customerId}
+        required
       >
         <option value="">Müşteri seçin</option>
         {customers.map((c) => (
           <option key={c.id} value={c.id}>
             {c.fullName}
+            {c.phone ? ` — ${c.phone}` : ""}
           </option>
         ))}
       </Select>
@@ -178,6 +182,7 @@ export function DeviceForm({
           setModelId("");
         }}
         error={errors.brandId}
+        required
       >
         <option value="">
           {lookupsLoading ? "Markalar yükleniyor…" : "Marka seçin"}
@@ -188,6 +193,11 @@ export function DeviceForm({
           </option>
         ))}
       </Select>
+      {!lookupsLoading && brands.length === 0 && !lookupError && (
+        <p className="text-xs text-amber-700">
+          Henüz marka kaydı yok. Yönetici marka ekledikten sonra cihaz kaydı açabilirsiniz.
+        </p>
+      )}
 
       <Select
         label="Model"
@@ -195,6 +205,7 @@ export function DeviceForm({
         disabled={!brandId || modelsLoading}
         onChange={(e) => setModelId(e.target.value)}
         error={errors.modelId}
+        required
       >
         <option value="">
           {!brandId
@@ -210,6 +221,11 @@ export function DeviceForm({
           </option>
         ))}
       </Select>
+      {brandId && !modelsLoading && models.length === 0 && !lookupError && (
+        <p className="text-xs text-amber-700">
+          Bu markaya ait model bulunamadı.
+        </p>
+      )}
 
       <Input
         label="Seri Numarası"
@@ -233,10 +249,10 @@ export function DeviceForm({
         onChange={(e) => setInstallationDate(e.target.value)}
       />
 
-      {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+      {submitError && <ErrorMessage message={submitError} />}
 
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
           İptal
         </Button>
         <Button type="submit" loading={loading}>

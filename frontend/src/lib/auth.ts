@@ -124,3 +124,14 @@ export function isTokenExpired(): boolean {
   if (!payload?.exp) return false;
   return payload.exp * 1000 <= Date.now();
 }
+
+/** Rol matrisine göre ilk erişilebilir sayfa */
+export function getDefaultHomePath(
+  items: { href: string; roles: string[] }[]
+): string {
+  const roles = getAuthRoles();
+  const match = items.find((item) =>
+    item.roles.some((allowed) => roles.includes(allowed))
+  );
+  return match?.href ?? "/login";
+}

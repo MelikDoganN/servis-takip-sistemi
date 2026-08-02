@@ -265,19 +265,45 @@ export default function MusterilerPage() {
                     <TableCell className="whitespace-nowrap text-xs text-slate-500">
                       {formatDateTime(customer.createdAt)}
                     </TableCell>
-                    <TableCell className="max-w-[10rem] truncate">{customer.address || "—"}</TableCell>
+                    <TableCell
+                      className="max-w-[10rem] truncate"
+                      title={customer.address || undefined}
+                    >
+                      {customer.address || "—"}
+                    </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openDetail(customer.id)} title="Detay" className="!px-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDetail(customer.id)}
+                          title="Detay"
+                          aria-label="Müşteri detayı"
+                          className="!px-2"
+                        >
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                         {canManage && (
-                          <Button variant="outline" size="sm" onClick={() => openEdit(customer.id)} title="Düzenle" className="!px-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEdit(customer.id)}
+                            title="Düzenle"
+                            aria-label="Müşteri düzenle"
+                            className="!px-2"
+                          >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         {canDelete && (
-                          <Button variant="danger" size="sm" onClick={() => openDelete(customer.id)} title="Sil" className="!px-2">
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => openDelete(customer.id)}
+                            title="Sil"
+                            aria-label="Müşteri sil"
+                            className="!px-2"
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}

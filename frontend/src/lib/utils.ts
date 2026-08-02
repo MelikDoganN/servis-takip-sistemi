@@ -19,3 +19,10 @@ export function formatDate(value?: string | null): string {
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("tr-TR");
 }
+
+/** null/undefined/boş string → "—" */
+export function displayValue(value?: string | number | null): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "string" && value.trim() === "") return "—";
+  return String(value);
+}

@@ -67,6 +67,7 @@ export function Sidebar({ mobile = false }: SidebarProps) {
                     onClick={mobile ? close : undefined}
                     className={cn(
                       "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
                       isActive
                         ? "nav-link-active"
                         : "text-slate-300 hover:bg-white/5 hover:text-white"

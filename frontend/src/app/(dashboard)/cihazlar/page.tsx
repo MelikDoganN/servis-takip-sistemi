@@ -21,11 +21,35 @@ import { ApiError } from "@/types/api";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
 import { SkeletonTable } from "@/components/ui/Skeleton";
+import { Badge } from "@/components/ui/Badge";
 import { Eye, Pencil, Trash2, MonitorSmartphone } from "lucide-react";
 import { canDeleteRecords, canManageRecords } from "@/lib/auth";
 
 type ViewMode = "table" | "grid";
 type ModalMode = "create" | "edit" | "detail" | "delete" | null;
+
+function deviceWarrantyLabel(device: Device): {
+  text: string;
+  variant: "success" | "danger" | "warning" | "neutral";
+} {
+  const months = device.model?.generalWarrantyMonths;
+  const start = device.purchaseDate || device.installationDate;
+  if (months == null || months <= 0) {
+    return { text: "Tanımlı değil", variant: "neutral" };
+  }
+  if (!start) {
+    return { text: "Tarih eksik", variant: "warning" };
+  }
+  const end = new Date(start);
+  if (Number.isNaN(end.getTime())) {
+    return { text: "—", variant: "neutral" };
+  }
+  end.setMonth(end.getMonth() + months);
+  const active = end.getTime() >= Date.now();
+  return active
+    ? { text: "Aktif", variant: "success" }
+    : { text: "Süresi dolmuş", variant: "danger" };
+}
 
 export default function CihazlarPage() {
   const toast = useToast();
@@ -178,16 +202,37 @@ export default function CihazlarPage() {
 
   const actionButtons = (device: Device) => (
     <div className="flex justify-end gap-1">
-      <Button variant="ghost" size="sm" onClick={() => openDetail(device.id)} title="Detay" className="!px-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => openDetail(device.id)}
+        title="Detay"
+        aria-label="Cihaz detayı"
+        className="!px-2"
+      >
         <Eye className="h-3.5 w-3.5" />
       </Button>
       {canManage && (
-        <Button variant="outline" size="sm" onClick={() => openEdit(device.id)} title="Düzenle" className="!px-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => openEdit(device.id)}
+          title="Düzenle"
+          aria-label="Cihaz düzenle"
+          className="!px-2"
+        >
           <Pencil className="h-3.5 w-3.5" />
         </Button>
       )}
       {canDelete && (
-        <Button variant="danger" size="sm" onClick={() => openDelete(device.id)} title="Sil" className="!px-2">
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={() => openDelete(device.id)}
+          title="Sil"
+          aria-label="Cihaz sil"
+          className="!px-2"
+        >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
@@ -273,27 +318,36 @@ export default function CihazlarPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Seri No</TableHead>
-                    <TableHead>Marka / Model</TableHead>
                     <TableHead>Müşteri</TableHead>
+                    <TableHead>Marka</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Seri No</TableHead>
                     <TableHead>Satın Alma</TableHead>
                     <TableHead>Kurulum</TableHead>
+                    <TableHead>Garanti</TableHead>
                     <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginated.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell className="font-medium text-navy">{device.serialNumber}</TableCell>
-                      <TableCell>
-                        {device.model?.brand?.name ?? "—"} / {device.model?.name ?? "—"}
-                      </TableCell>
-                      <TableCell>{device.customer?.fullName || "—"}</TableCell>
-                      <TableCell>{formatDate(device.purchaseDate)}</TableCell>
-                      <TableCell>{formatDate(device.installationDate)}</TableCell>
-                      <TableCell>{actionButtons(device)}</TableCell>
-                    </TableRow>
-                  ))}
+                  {paginated.map((device) => {
+                    const warranty = deviceWarrantyLabel(device);
+                    return (
+                      <TableRow key={device.id}>
+                        <TableCell className="font-medium text-navy">
+                          {device.customer?.fullName || "—"}
+                        </TableCell>
+                        <TableCell>{device.model?.brand?.name ?? "—"}</TableCell>
+                        <TableCell>{device.model?.name ?? "—"}</TableCell>
+                        <TableCell>{device.serialNumber || "—"}</TableCell>
+                        <TableCell>{formatDate(device.purchaseDate)}</TableCell>
+                        <TableCell>{formatDate(device.installationDate)}</TableCell>
+                        <TableCell>
+                          <Badge variant={warranty.variant}>{warranty.text}</Badge>
+                        </TableCell>
+                        <TableCell>{actionButtons(device)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (

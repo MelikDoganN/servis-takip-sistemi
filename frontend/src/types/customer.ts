@@ -11,7 +11,7 @@ export interface Customer {
 
 export interface CreateCustomerRequest {
   fullName: string;
-  phone?: string;
+  phone: string;
   whatsappNumber?: string;
   email?: string;
   address?: string;
@@ -19,7 +19,7 @@ export interface CreateCustomerRequest {
 
 export interface UpdateCustomerRequest {
   fullName: string;
-  phone?: string;
+  phone: string;
   whatsappNumber?: string;
   email?: string;
   address?: string;

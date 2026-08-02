@@ -37,11 +37,12 @@ export const MANAGEABLE_ROLES: BackendRoleName[] = [
 export const ASSIGNABLE_ROLES: BackendRoleName[] = [
   "ADMIN",
   "CENTER_OPERATOR",
+  "REGION_MANAGER",
   "TECHNICIAN",
 ];
 
 export const ROLE_LABELS: Record<string, string> = {
-  ADMIN: "Admin",
+  ADMIN: "Yönetici",
   CENTER_OPERATOR: "Merkez Operatör",
   TECHNICIAN: "Teknisyen",
   REGION_MANAGER: "Bölge Yöneticisi",

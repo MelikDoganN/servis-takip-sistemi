@@ -2,14 +2,19 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { isAuthenticated } from "@/lib/auth";
+import { getDefaultHomePath, isAuthenticated } from "@/lib/auth";
+import { navItems } from "@/config/navigation";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(isAuthenticated() ? "/dashboard" : "/login");
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
+    router.replace(getDefaultHomePath(navItems));
   }, [router]);
 
   return (

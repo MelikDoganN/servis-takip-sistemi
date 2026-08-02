@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { authService } from "@/services/authService";
-import { setToken } from "@/lib/auth";
+import { setToken, getDefaultHomePath } from "@/lib/auth";
+import { navItems } from "@/config/navigation";
 import { ApiError } from "@/types/api";
 import { Settings2 } from "lucide-react";
 
@@ -80,7 +81,7 @@ export function LoginForm() {
       }
 
       setToken(result.token);
-      router.replace("/dashboard");
+      router.replace(getDefaultHomePath(navItems));
     } catch (err) {
       const apiErr = err as ApiError;
       setApiError(apiErr.message || "Giriş yapılamadı");
