@@ -27,3 +27,4 @@ replay_pid*
 frontend/node_modules/
 frontend/.next/
 frontend/.env.local
+whatsapp-bot/__pycache__/
