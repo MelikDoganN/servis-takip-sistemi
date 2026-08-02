@@ -101,7 +101,7 @@ export default function GarantiSorgulamaPage() {
   const selectedDevice = devices.find((d) => String(d.id) === selectedDeviceId);
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Garanti Sorgulama"
         description="Cihaz garanti durumunu hızlıca kontrol edin"

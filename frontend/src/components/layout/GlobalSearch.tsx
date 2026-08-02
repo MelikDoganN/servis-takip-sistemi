@@ -246,13 +246,13 @@ export function GlobalSearch() {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        placeholder="Müşteri, cihaz, iş emri, teknisyen, kullanıcı ara..."
-        className="h-10 w-56 rounded-xl border border-slate-200 bg-surface pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-accent focus:bg-white focus:ring-4 focus:ring-accent/20 lg:w-72"
+        placeholder="Ara…"
+        className="h-10 w-48 rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent/20 lg:w-64"
         aria-label="Genel arama"
       />
 
       {showDropdown && (
-        <div className="absolute left-0 top-full z-30 mt-2 w-[22rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-elevated animate-fade-in">
+        <div className="absolute right-0 top-full z-30 mt-2 w-[22rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-elevated animate-fade-in">
           {loading ? (
             <div className="flex items-center gap-2 px-4 py-4 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" />

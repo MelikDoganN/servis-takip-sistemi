@@ -12,6 +12,8 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Pagination } from "@/components/ui/Pagination";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DetailList } from "@/components/ui/DetailList";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import {
   Table,
   TableBody,
@@ -287,7 +289,7 @@ export default function TeknisyenlerPage() {
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Teknisyenler"
         description="Saha teknisyenlerini yönetin"
@@ -472,65 +474,41 @@ export default function TeknisyenlerPage() {
 
             {modalMode === "create" ? (
               <>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Ad Soyad
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                    value={form.fullName}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, fullName: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    E-posta
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                    value={form.email}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, email: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Telefon
-                  </label>
-                  <input
-                    type="text"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                    value={form.phone}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, phone: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Şifre
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, password: e.target.value }))
-                    }
-                  />
-                  <p className="mt-1 text-xs text-slate-400">
-                    Kullanıcı hesabı otomatik TECHNICIAN rolü ile oluşturulur.
-                  </p>
-                </div>
+                <Input
+                  label="Ad Soyad"
+                  required
+                  value={form.fullName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, fullName: e.target.value }))
+                  }
+                />
+                <Input
+                  label="E-posta"
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Telefon"
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Şifre"
+                  type="password"
+                  required
+                  minLength={6}
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, password: e.target.value }))
+                  }
+                  hint="Kullanıcı hesabı otomatik TECHNICIAN rolü ile oluşturulur."
+                />
               </>
             ) : (
               <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-2">
@@ -561,59 +539,43 @@ export default function TeknisyenlerPage() {
               </div>
             )}
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Bölge
-              </label>
-              <select
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={form.regionId}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, regionId: e.target.value }))
-                }
-              >
-                <option value="">Bölge seçin (opsiyonel)…</option>
-                {regions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Bölge"
+              value={form.regionId}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, regionId: e.target.value }))
+              }
+            >
+              <option value="">Bölge seçin (opsiyonel)…</option>
+              {regions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </Select>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                WhatsApp
-              </label>
-              <input
-                type="text"
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={form.whatsappNumber}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, whatsappNumber: e.target.value }))
-                }
-                placeholder="WhatsApp numarası"
-              />
-            </div>
+            <Input
+              label="WhatsApp"
+              value={form.whatsappNumber}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, whatsappNumber: e.target.value }))
+              }
+              placeholder="WhatsApp numarası"
+            />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  İş Yükü
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                  value={form.currentWorkload}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      currentWorkload: e.target.value,
-                    }))
-                  }
-                />
-              </div>
+              <Input
+                label="İş Yükü"
+                type="number"
+                min={0}
+                value={form.currentWorkload}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    currentWorkload: e.target.value,
+                  }))
+                }
+              />
               <div className="flex items-end pb-1">
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input
@@ -625,7 +587,7 @@ export default function TeknisyenlerPage() {
                         isAvailable: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 rounded border-slate-300"
+                    className="h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
                   />
                   Müsait
                 </label>

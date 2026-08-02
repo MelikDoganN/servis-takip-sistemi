@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * MTÜ kurumsal kimlik referansı:
+ * MTÜ kurumsal kimlik:
  * Lacivert #262F59 · Turkuaz #12A7CD · Beyaz
  */
 const config: Config = {
@@ -37,7 +37,7 @@ const config: Config = {
           strong: "#0d8eae",
         },
         surface: {
-          DEFAULT: "#f4f7fb",
+          DEFAULT: "#f5f7fa",
           muted: "#e8eef5",
           card: "#ffffff",
         },
@@ -45,20 +45,18 @@ const config: Config = {
           DEFAULT: "#1a203d",
           hover: "#262F59",
           active: "#12A7CD",
-          border: "rgba(18,167,205,0.18)",
+          border: "rgba(255,255,255,0.08)",
         },
       },
       boxShadow: {
-        soft: "0 1px 2px rgb(38 47 89 / 0.04), 0 1px 3px rgb(38 47 89 / 0.06)",
-        card: "0 1px 2px rgb(38 47 89 / 0.04), 0 6px 16px rgb(38 47 89 / 0.06)",
-        elevated:
-          "0 10px 28px rgb(38 47 89 / 0.10), 0 2px 8px rgb(38 47 89 / 0.05)",
-        glow: "0 0 0 3px rgb(18 167 205 / 0.22)",
-        "sidebar-glow": "0 0 24px rgb(18 167 205 / 0.25)",
+        soft: "0 1px 2px rgb(38 47 89 / 0.04)",
+        card: "0 1px 3px rgb(38 47 89 / 0.05), 0 4px 12px rgb(38 47 89 / 0.04)",
+        elevated: "0 4px 16px rgb(38 47 89 / 0.08), 0 1px 4px rgb(38 47 89 / 0.04)",
+        glow: "0 0 0 3px rgb(18 167 205 / 0.18)",
       },
       borderRadius: {
-        xl: "0.875rem",
-        "2xl": "1rem",
+        xl: "0.75rem",
+        "2xl": "0.875rem",
       },
       maxWidth: {
         content: "1280px",
@@ -69,15 +67,15 @@ const config: Config = {
           "100%": { opacity: "1" },
         },
         "slide-up": {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "slide-in-right": {
-          "0%": { opacity: "0", transform: "translateX(16px)" },
+          "0%": { opacity: "0", transform: "translateX(12px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
         "page-enter": {
-          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         "nav-indicator": {
@@ -85,7 +83,7 @@ const config: Config = {
           "100%": { transform: "scaleY(1)", opacity: "1" },
         },
         "scale-in": {
-          "0%": { opacity: "0", transform: "scale(0.96)" },
+          "0%": { opacity: "0", transform: "scale(0.97)" },
           "100%": { opacity: "1", transform: "scale(1)" },
         },
         "toast-progress": {
@@ -98,12 +96,12 @@ const config: Config = {
         },
       },
       animation: {
-        "fade-in": "fade-in 0.28s ease-out",
-        "slide-up": "slide-up 0.35s ease-out",
-        "slide-in-right": "slide-in-right 0.32s ease-out",
-        "page-enter": "page-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
-        "nav-indicator": "nav-indicator 0.28s ease-out",
-        "scale-in": "scale-in 0.2s ease-out",
+        "fade-in": "fade-in 0.2s ease-out",
+        "slide-up": "slide-up 0.25s ease-out",
+        "slide-in-right": "slide-in-right 0.25s ease-out",
+        "page-enter": "page-enter 0.3s ease-out",
+        "nav-indicator": "nav-indicator 0.2s ease-out",
+        "scale-in": "scale-in 0.18s ease-out",
         "toast-progress": "toast-progress 4s linear forwards",
         shimmer: "shimmer 1.6s ease-in-out infinite",
       },

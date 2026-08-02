@@ -31,7 +31,6 @@ export default function MusterilerPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "withEmail" | "withPhone">("all");
   const [page, setPage] = useState(1);
@@ -146,7 +145,6 @@ export default function MusterilerPage() {
 
   const handleCreate = async (data: CreateCustomerRequest) => {
     await customerService.create(data);
-    setSuccess("Müşteri başarıyla eklendi.");
     toast.success("Müşteri başarıyla eklendi.");
     closeModal();
     await fetchCustomers();
@@ -155,7 +153,6 @@ export default function MusterilerPage() {
   const handleUpdate = async (data: CreateCustomerRequest) => {
     if (selectedId == null) return;
     await customerService.update(selectedId, data);
-    setSuccess("Müşteri başarıyla güncellendi.");
     toast.success("Müşteri başarıyla güncellendi.");
     closeModal();
     await fetchCustomers();
@@ -167,7 +164,6 @@ export default function MusterilerPage() {
     setActionError("");
     try {
       await customerService.delete(selectedId);
-      setSuccess("Müşteri silindi.");
       toast.success("Müşteri silindi.");
       closeModal();
       await fetchCustomers();
@@ -192,7 +188,7 @@ export default function MusterilerPage() {
             : "";
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Müşteriler"
         description="Müşteri portföyünüzü yönetin ve takip edin"
@@ -206,17 +202,8 @@ export default function MusterilerPage() {
         }
       />
 
-      {success && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-soft animate-slide-up">
-          {success}
-          <button type="button" className="ml-3 underline" onClick={() => setSuccess("")}>
-            Kapat
-          </button>
-        </div>
-      )}
-
       <SectionCard title="Müşteri Listesi" noPadding>
-        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3.5 sm:flex-row sm:items-center">
           <SearchInput
             value={search}
             onChange={setSearch}
@@ -226,7 +213,7 @@ export default function MusterilerPage() {
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as typeof filter)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+            className="field-base h-10 w-full sm:w-auto sm:min-w-[11rem]"
           >
             <option value="all">Tüm Müşteriler</option>
             <option value="withEmail">E-postası Olanlar</option>
@@ -256,55 +243,50 @@ export default function MusterilerPage() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ad Soyad</TableHead>
-                    <TableHead>Telefon</TableHead>
-                    <TableHead>WhatsApp</TableHead>
-                    <TableHead>E-posta</TableHead>
-                    <TableHead>Oluşturulma</TableHead>
-                    <TableHead>Adres</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginated.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell className="font-medium text-slate-900">{customer.fullName}</TableCell>
-                      <TableCell>{customer.phone || "—"}</TableCell>
-                      <TableCell>{customer.whatsappNumber || "—"}</TableCell>
-                      <TableCell>{customer.email || "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap text-xs text-slate-500">
-                        {formatDateTime(customer.createdAt)}
-                      </TableCell>
-                      <TableCell className="max-w-[10rem] truncate">{customer.address || "—"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openDetail(customer.id)} title="Detay">
-                            <Eye className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline">Detay</span>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ad Soyad</TableHead>
+                  <TableHead>Telefon</TableHead>
+                  <TableHead>WhatsApp</TableHead>
+                  <TableHead>E-posta</TableHead>
+                  <TableHead>Oluşturulma</TableHead>
+                  <TableHead>Adres</TableHead>
+                  <TableHead className="text-right">İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginated.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell className="font-medium text-navy">{customer.fullName}</TableCell>
+                    <TableCell>{customer.phone || "—"}</TableCell>
+                    <TableCell>{customer.whatsappNumber || "—"}</TableCell>
+                    <TableCell>{customer.email || "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-slate-500">
+                      {formatDateTime(customer.createdAt)}
+                    </TableCell>
+                    <TableCell className="max-w-[10rem] truncate">{customer.address || "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openDetail(customer.id)} title="Detay" className="!px-2">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        {canManage && (
+                          <Button variant="outline" size="sm" onClick={() => openEdit(customer.id)} title="Düzenle" className="!px-2">
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          {canManage && (
-                            <Button variant="outline" size="sm" onClick={() => openEdit(customer.id)} title="Düzenle">
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span className="hidden lg:inline">Düzenle</span>
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="danger" size="sm" onClick={() => openDelete(customer.id)} title="Sil">
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="hidden lg:inline">Sil</span>
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                        )}
+                        {canDelete && (
+                          <Button variant="danger" size="sm" onClick={() => openDelete(customer.id)} title="Sil" className="!px-2">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             <Pagination
               currentPage={page}
               totalPages={totalPages}

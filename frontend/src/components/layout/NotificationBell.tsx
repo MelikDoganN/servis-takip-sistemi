@@ -95,7 +95,7 @@ export function NotificationBell() {
             id: `new-order-${wo.id}`,
             type: "new-order",
             title: "Yeni iş emri",
-            message: `#${wo.id} — ${wo.customer?.fullName || "Müşteri yok"}`,
+            message: wo.customer?.fullName || "Yeni iş emri kaydı",
             createdAt: wo.createdAt,
             href: "/is-emirleri",
           })
@@ -114,7 +114,7 @@ export function NotificationBell() {
             id: `open-order-${wo.id}`,
             type: "open-order",
             title: "Açık kalan iş emri",
-            message: `#${wo.id} uzun süredir açık — ${wo.customer?.fullName || "—"}`,
+            message: `${wo.customer?.fullName || "İş emri"} uzun süredir açık`,
             createdAt: wo.createdAt,
             href: "/is-emirleri",
           })
@@ -223,12 +223,12 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-navy/70 shadow-soft transition hover:border-accent/40 hover:bg-accent-soft hover:text-navy"
+        className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-navy"
         aria-label="Bildirimler"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute right-1.5 top-1.5 flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-semibold text-white shadow-[0_0_6px_rgba(18,167,205,0.8)]">
+          <span className="absolute right-1.5 top-1.5 flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-semibold text-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}

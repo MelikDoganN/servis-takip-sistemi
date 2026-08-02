@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
 import { Badge } from "@/components/ui/Badge";
 import { SearchInput } from "@/components/ui/SearchInput";
@@ -343,7 +344,7 @@ export default function KullaniciYonetimiPage() {
   );
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Kullanıcı Yönetimi"
         description="Sistem kullanıcılarını görüntüleyin ve yönetin"
@@ -508,27 +509,20 @@ export default function KullaniciYonetimiPage() {
             onChange={(e) => setPhone(e.target.value)}
           />
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Rol
-            </label>
-            <select
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={role}
-              onChange={(e) =>
-                setRole(e.target.value as CreateUserRequest["role"])
-              }
-            >
-              {MANAGEABLE_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {roleLabel(r)}
-                </option>
-              ))}
-            </select>
-            {errors.role && (
-              <p className="mt-1.5 text-sm text-red-600">{errors.role}</p>
-            )}
-          </div>
+          <Select
+            label="Rol"
+            value={role}
+            onChange={(e) =>
+              setRole(e.target.value as CreateUserRequest["role"])
+            }
+            error={errors.role}
+          >
+            {MANAGEABLE_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {roleLabel(r)}
+              </option>
+            ))}
+          </Select>
 
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={closeModal}>
@@ -599,24 +593,19 @@ export default function KullaniciYonetimiPage() {
             </p>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Yeni Rol
-            </label>
-            <select
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={selectedRole}
-              onChange={(e) =>
-                setSelectedRole(e.target.value as BackendRoleName)
-              }
-            >
-              {ASSIGNABLE_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {roleLabel(r)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Yeni Rol"
+            value={selectedRole}
+            onChange={(e) =>
+              setSelectedRole(e.target.value as BackendRoleName)
+            }
+          >
+            {ASSIGNABLE_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {roleLabel(r)}
+              </option>
+            ))}
+          </Select>
 
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={closeRole}>

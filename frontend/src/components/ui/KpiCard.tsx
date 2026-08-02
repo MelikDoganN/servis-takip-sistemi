@@ -22,37 +22,34 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card",
-        "transition-all duration-300 ease-out",
-        "hover:-translate-y-1 hover:border-accent/30 hover:shadow-elevated",
+        "flex h-full flex-col rounded-2xl border border-slate-200/90 bg-white p-4 shadow-card",
+        "transition-shadow duration-200 hover:shadow-elevated",
         className
       )}
     >
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-navy via-accent to-primary-300" />
-      <div className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br from-accent/15 to-transparent transition-transform duration-500 group-hover:scale-125" />
-      <div className="absolute -bottom-10 -left-6 h-24 w-24 rounded-full bg-navy/5 transition-transform duration-500 group-hover:scale-110" />
-
-      <div className="relative flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div
           className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-2xl shadow-soft ring-1 ring-white/60 transition-transform duration-300 group-hover:scale-105",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
             iconBg
           )}
         >
           {icon}
         </div>
         {trend && (
-          <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-strong ring-1 ring-accent/20">
+          <span className="rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-strong">
             {trend}
           </span>
         )}
       </div>
-      <p className="relative mt-5 text-sm font-medium text-slate-500">{label}</p>
-      <p className="relative mt-1 text-3xl font-semibold tracking-tight text-navy">
+      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-navy tabular-nums">
         {value}
       </p>
       {description && (
-        <p className="relative mt-2 text-xs text-slate-400">{description}</p>
+        <p className="mt-1 text-xs leading-snug text-slate-400">{description}</p>
       )}
     </div>
   );

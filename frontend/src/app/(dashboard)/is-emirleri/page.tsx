@@ -21,6 +21,8 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Pagination } from "@/components/ui/Pagination";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { DetailList } from "@/components/ui/DetailList";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import {
   Table,
   TableBody,
@@ -401,7 +403,7 @@ export default function IsEmirleriPage() {
   const canAssign = (wo: WorkOrder) => wo.status !== "CLOSED";
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="İş Emirleri"
         description="Servis taleplerini takip edin ve yönetin"
@@ -456,7 +458,7 @@ export default function IsEmirleriPage() {
                 placeholder="Ara (müşteri, seri no, açıklama…)"
               />
               <select
-                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-soft"
+                className="field-base h-10 w-full sm:w-auto sm:min-w-[10rem]"
                 value={statusFilter}
                 onChange={(e) =>
                   setStatusFilter(e.target.value as WorkOrderStatus | "")
@@ -694,97 +696,71 @@ export default function IsEmirleriPage() {
         <form onSubmit={handleCreate} className="space-y-4">
           {actionError && <ErrorMessage message={actionError} />}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Müşteri
-            </label>
-            <select
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={customerId}
-              onChange={(e) => {
-                setCustomerId(e.target.value);
-                setDeviceId("");
-              }}
-              required
-            >
-              <option value="">Seçin</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.fullName}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Müşteri"
+            value={customerId}
+            onChange={(e) => {
+              setCustomerId(e.target.value);
+              setDeviceId("");
+            }}
+            required
+          >
+            <option value="">Müşteri seçin</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.fullName}
+              </option>
+            ))}
+          </Select>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Cihaz
-            </label>
-            <select
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={deviceId}
-              onChange={(e) => setDeviceId(e.target.value)}
-              required
-              disabled={!customerId}
-            >
-              <option value="">Seçin</option>
-              {devicesForCustomer.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.serialNumber}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Cihaz"
+            value={deviceId}
+            onChange={(e) => setDeviceId(e.target.value)}
+            required
+            disabled={!customerId}
+          >
+            <option value="">
+              {customerId ? "Cihaz seçin" : "Önce müşteri seçin"}
+            </option>
+            {devicesForCustomer.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.serialNumber}
+                {d.model?.name ? ` — ${d.model.brand?.name ?? ""} ${d.model.name}` : ""}
+              </option>
+            ))}
+          </Select>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Açıklama
-            </label>
-            <textarea
-              className="min-h-[88px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-            />
-          </div>
+          <Textarea
+            label="Açıklama"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+          />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Öncelik
-              </label>
-              <select
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={priority}
-                onChange={(e) =>
-                  setPriority(e.target.value as WorkOrderPriority)
-                }
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Servis Tipi
-              </label>
-              <select
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={serviceType}
-                onChange={(e) =>
-                  setServiceType(e.target.value as ServiceType)
-                }
-              >
-                {SERVICE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Öncelik"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as WorkOrderPriority)}
+            >
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="Servis Tipi"
+              value={serviceType}
+              onChange={(e) => setServiceType(e.target.value as ServiceType)}
+            >
+              {SERVICE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t === "WARRANTY" ? "Garanti" : "Ücretli"}
+                </option>
+              ))}
+            </Select>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -1020,24 +996,19 @@ export default function IsEmirleriPage() {
                 {WORK_ORDER_STATUS_LABELS[selected.status]}
               </Badge>
             </p>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Yeni durum
-              </label>
-              <select
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
-                value={nextStatus}
-                onChange={(e) =>
-                  setNextStatus(e.target.value as WorkOrderStatus)
-                }
-              >
-                {(WORK_ORDER_TRANSITIONS[selected.status] ?? []).map((s) => (
-                  <option key={s} value={s}>
-                    {WORK_ORDER_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Yeni durum"
+              value={nextStatus}
+              onChange={(e) =>
+                setNextStatus(e.target.value as WorkOrderStatus)
+              }
+            >
+              {(WORK_ORDER_TRANSITIONS[selected.status] ?? []).map((s) => (
+                <option key={s} value={s}>
+                  {WORK_ORDER_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </Select>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeModal}>
                 İptal
@@ -1087,11 +1058,8 @@ export default function IsEmirleriPage() {
               />
             ) : (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Müsait teknisyenler
-                </label>
-                <select
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                <Select
+                  label="Müsait teknisyenler"
                   value={assignTechnicianId}
                   onChange={(e) => setAssignTechnicianId(e.target.value)}
                 >
@@ -1102,7 +1070,7 @@ export default function IsEmirleriPage() {
                       {t.region?.name ? `, ${t.region.name}` : ""})
                     </option>
                   ))}
-                </select>
+                </Select>
                 <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
                   {availableTechnicians.map((t) => (
                     <li key={t.id}>
@@ -1111,7 +1079,7 @@ export default function IsEmirleriPage() {
                         className={cn(
                           "w-full rounded-lg px-2 py-1.5 text-left transition",
                           String(t.id) === assignTechnicianId
-                            ? "bg-primary-50 text-primary-800"
+                            ? "bg-accent-soft text-accent-strong"
                             : "hover:bg-white"
                         )}
                         onClick={() => setAssignTechnicianId(String(t.id))}

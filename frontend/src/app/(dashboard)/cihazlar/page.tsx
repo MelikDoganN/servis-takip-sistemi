@@ -35,7 +35,6 @@ export default function CihazlarPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [page, setPage] = useState(1);
@@ -146,7 +145,6 @@ export default function CihazlarPage() {
 
   const handleCreate = async (data: CreateDeviceRequest) => {
     await deviceService.create(data);
-    setSuccess("Cihaz başarıyla eklendi.");
     toast.success("Cihaz başarıyla eklendi.");
     closeModal();
     await fetchData();
@@ -155,7 +153,6 @@ export default function CihazlarPage() {
   const handleUpdate = async (data: CreateDeviceRequest) => {
     if (selectedId == null) return;
     await deviceService.update(selectedId, data);
-    setSuccess("Cihaz başarıyla güncellendi.");
     toast.success("Cihaz başarıyla güncellendi.");
     closeModal();
     await fetchData();
@@ -167,7 +164,6 @@ export default function CihazlarPage() {
     setActionError("");
     try {
       await deviceService.delete(selectedId);
-      setSuccess("Cihaz silindi.");
       toast.success("Cihaz silindi.");
       closeModal();
       await fetchData();
@@ -181,21 +177,18 @@ export default function CihazlarPage() {
   };
 
   const actionButtons = (device: Device) => (
-    <div className="flex flex-wrap justify-end gap-1">
-      <Button variant="ghost" size="sm" onClick={() => openDetail(device.id)} title="Detay">
+    <div className="flex justify-end gap-1">
+      <Button variant="ghost" size="sm" onClick={() => openDetail(device.id)} title="Detay" className="!px-2">
         <Eye className="h-3.5 w-3.5" />
-        <span className="hidden lg:inline">Detay</span>
       </Button>
       {canManage && (
-        <Button variant="outline" size="sm" onClick={() => openEdit(device.id)} title="Düzenle">
+        <Button variant="outline" size="sm" onClick={() => openEdit(device.id)} title="Düzenle" className="!px-2">
           <Pencil className="h-3.5 w-3.5" />
-          <span className="hidden lg:inline">Düzenle</span>
         </Button>
       )}
       {canDelete && (
-        <Button variant="danger" size="sm" onClick={() => openDelete(device.id)} title="Sil">
+        <Button variant="danger" size="sm" onClick={() => openDelete(device.id)} title="Sil" className="!px-2">
           <Trash2 className="h-3.5 w-3.5" />
-          <span className="hidden lg:inline">Sil</span>
         </Button>
       )}
     </div>
@@ -213,7 +206,7 @@ export default function CihazlarPage() {
             : "";
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Cihazlar"
         description="Kayıtlı cihazları görüntüleyin ve yönetin"
@@ -227,30 +220,21 @@ export default function CihazlarPage() {
         }
       />
 
-      {success && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-soft animate-slide-up">
-          {success}
-          <button type="button" className="ml-3 underline" onClick={() => setSuccess("")}>
-            Kapat
-          </button>
-        </div>
-      )}
-
       <SectionCard title="Cihaz Envanteri" noPadding>
-        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <SearchInput
             value={search}
             onChange={setSearch}
             placeholder="Seri no, müşteri veya marka ara..."
             className="max-w-md flex-1"
           />
-          <div className="flex rounded-lg border border-slate-200 p-1">
+          <div className="flex rounded-xl border border-slate-200 p-1">
             <button
               type="button"
               onClick={() => setViewMode("table")}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === "table" ? "bg-primary-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                viewMode === "table" ? "bg-navy text-white" : "text-slate-600 hover:bg-slate-50"
               )}
             >
               Tablo
@@ -259,8 +243,8 @@ export default function CihazlarPage() {
               type="button"
               onClick={() => setViewMode("grid")}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                viewMode === "grid" ? "bg-primary-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                viewMode === "grid" ? "bg-navy text-white" : "text-slate-600 hover:bg-slate-50"
               )}
             >
               Kart
@@ -286,58 +270,46 @@ export default function CihazlarPage() {
         ) : (
           <>
             {viewMode === "table" ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Seri No</TableHead>
-                      <TableHead>Marka / Model</TableHead>
-                      <TableHead>Müşteri</TableHead>
-                      <TableHead>Satın Alma</TableHead>
-                      <TableHead>Kurulum</TableHead>
-                      <TableHead className="text-right">İşlemler</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Seri No</TableHead>
+                    <TableHead>Marka / Model</TableHead>
+                    <TableHead>Müşteri</TableHead>
+                    <TableHead>Satın Alma</TableHead>
+                    <TableHead>Kurulum</TableHead>
+                    <TableHead className="text-right">İşlemler</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginated.map((device) => (
+                    <TableRow key={device.id}>
+                      <TableCell className="font-medium text-navy">{device.serialNumber}</TableCell>
+                      <TableCell>
+                        {device.model?.brand?.name ?? "—"} / {device.model?.name ?? "—"}
+                      </TableCell>
+                      <TableCell>{device.customer?.fullName || "—"}</TableCell>
+                      <TableCell>{formatDate(device.purchaseDate)}</TableCell>
+                      <TableCell>{formatDate(device.installationDate)}</TableCell>
+                      <TableCell>{actionButtons(device)}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginated.map((device) => (
-                      <TableRow key={device.id}>
-                        <TableCell className="font-medium text-slate-900">{device.serialNumber}</TableCell>
-                        <TableCell>
-                          {device.model?.brand?.name ?? "—"} / {device.model?.name ?? "—"}
-                        </TableCell>
-                        <TableCell>{device.customer?.fullName || "—"}</TableCell>
-                        <TableCell>{formatDate(device.purchaseDate)}</TableCell>
-                        <TableCell>{formatDate(device.installationDate)}</TableCell>
-                        <TableCell>{actionButtons(device)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
-              <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
                 {paginated.map((device) => (
-                  <div key={device.id} className="surface-card card-hover overflow-hidden">
-                    <div className="flex h-28 items-center justify-center bg-gradient-to-br from-slate-100 to-slate-50">
-                      <svg className="h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1}
-                          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                        />
-                      </svg>
+                  <div key={device.id} className="surface-card overflow-hidden">
+                    <div className="flex h-20 items-center justify-center bg-slate-50">
+                      <MonitorSmartphone className="h-8 w-8 text-slate-300" />
                     </div>
                     <div className="space-y-3 p-4">
                       <div>
-                        <p className="font-semibold text-slate-900">{device.serialNumber}</p>
+                        <p className="font-semibold text-navy">{device.serialNumber}</p>
                         <p className="mt-1 text-sm text-slate-500">
                           {device.model?.brand?.name} {device.model?.name}
                         </p>
                         <p className="mt-1 text-xs text-slate-400">{device.customer?.fullName}</p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          Kurulum: {formatDate(device.installationDate)}
-                        </p>
                       </div>
                       {actionButtons(device)}
                     </div>

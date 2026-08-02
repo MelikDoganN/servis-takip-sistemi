@@ -22,7 +22,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="field-base py-2.5 pl-10 pr-4"
+        className="field-base pl-10 pr-4"
       />
     </div>
   );

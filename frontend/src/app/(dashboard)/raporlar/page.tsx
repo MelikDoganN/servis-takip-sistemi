@@ -286,7 +286,7 @@ export default function RaporlarPage() {
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Raporlar"
         description="Operasyonel performans ve servis analizleri"
@@ -460,7 +460,6 @@ export default function RaporlarPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>İş Emri</TableHead>
                     <TableHead>Müşteri</TableHead>
                     <TableHead>Cihaz</TableHead>
                     <TableHead>Teknisyen</TableHead>
@@ -477,10 +476,7 @@ export default function RaporlarPage() {
                       onClick={() => void openWorkOrderDetail(wo)}
                       title="Detayı görüntüle"
                     >
-                      <TableCell className="font-medium text-primary-700">
-                        WO-{wo.id}
-                      </TableCell>
-                      <TableCell className="font-medium text-slate-900">
+                      <TableCell className="font-medium text-navy">
                         {wo.customer?.fullName || "—"}
                       </TableCell>
                       <TableCell>{wo.device?.serialNumber || "—"}</TableCell>

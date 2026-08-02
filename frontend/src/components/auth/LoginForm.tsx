@@ -97,11 +97,11 @@ export function LoginForm() {
 
       <div className="relative w-full max-w-md animate-slide-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-navy shadow-elevated ring-2 ring-white/20">
-            <Settings2 className="h-7 w-7 text-white" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent">
+            <Settings2 className="h-6 w-6 text-white" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">Servis Takip Sistemi</h1>
-          <p className="mt-2 text-sm text-primary-100/80">
+          <p className="mt-2 text-sm text-slate-300">
             {mode === "login" ? "Kurumsal yönetim paneline giriş yapın" : "Yeni hesap oluşturun"}
           </p>
         </div>

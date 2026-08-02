@@ -7,25 +7,25 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, action, icon }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="flex items-start gap-3">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
         {icon && (
-          <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-navy to-accent text-white shadow-card ring-1 ring-accent/20">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-navy text-white">
             {icon}
           </div>
         )}
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-navy sm:text-[1.65rem]">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight text-navy sm:text-2xl">
             {title}
-          </h2>
+          </h1>
           {description && (
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+            <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
               {description}
             </p>
           )}
         </div>
       </div>
-      {action && <div className="flex shrink-0 flex-wrap gap-2">{action}</div>}
+      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
     </div>
   );
 }

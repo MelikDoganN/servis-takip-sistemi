@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { CreateDeviceRequest, Device } from "@/types/device";
 import { Customer } from "@/types/customer";
@@ -154,91 +155,61 @@ export function DeviceForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       {lookupError && <p className="text-sm text-red-600">{lookupError}</p>}
 
-      <div className="w-full">
-        <label htmlFor="customerId" className="mb-1.5 block text-sm font-medium text-gray-700">
-          Müşteri
-        </label>
-        <select
-          id="customerId"
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-          className={
-            errors.customerId
-              ? "field-base border-red-400 focus:border-red-500 focus:ring-red-500/15"
-              : "field-base"
-          }
-        >
-          <option value="">Müşteri seçin</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.fullName}
-            </option>
-          ))}
-        </select>
-        {errors.customerId && <p className="mt-1.5 text-sm text-red-600">{errors.customerId}</p>}
-      </div>
-
-      <div className="w-full">
-        <label htmlFor="brandId" className="mb-1.5 block text-sm font-medium text-gray-700">
-          Marka
-        </label>
-        <select
-          id="brandId"
-          value={brandId}
-          disabled={lookupsLoading}
-          onChange={(e) => {
-            setBrandId(e.target.value);
-            setModelId("");
-          }}
-          className={
-            errors.brandId
-              ? "field-base border-red-400 focus:border-red-500 focus:ring-red-500/15"
-              : "field-base"
-          }
-        >
-          <option value="">
-            {lookupsLoading ? "Markalar yükleniyor…" : "Marka seçin"}
+      <Select
+        label="Müşteri"
+        value={customerId}
+        onChange={(e) => setCustomerId(e.target.value)}
+        error={errors.customerId}
+      >
+        <option value="">Müşteri seçin</option>
+        {customers.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.fullName}
           </option>
-          {brands.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-        {errors.brandId && <p className="mt-1.5 text-sm text-red-600">{errors.brandId}</p>}
-      </div>
+        ))}
+      </Select>
 
-      <div className="w-full">
-        <label htmlFor="modelId" className="mb-1.5 block text-sm font-medium text-gray-700">
-          Model
-        </label>
-        <select
-          id="modelId"
-          value={modelId}
-          disabled={!brandId || modelsLoading}
-          onChange={(e) => setModelId(e.target.value)}
-          className={
-            errors.modelId
-              ? "field-base border-red-400 focus:border-red-500 focus:ring-red-500/15"
-              : "field-base"
-          }
-        >
-          <option value="">
-            {!brandId
-              ? "Önce marka seçin"
-              : modelsLoading
-                ? "Modeller yükleniyor…"
-                : "Model seçin"}
+      <Select
+        label="Marka"
+        value={brandId}
+        disabled={lookupsLoading}
+        onChange={(e) => {
+          setBrandId(e.target.value);
+          setModelId("");
+        }}
+        error={errors.brandId}
+      >
+        <option value="">
+          {lookupsLoading ? "Markalar yükleniyor…" : "Marka seçin"}
+        </option>
+        {brands.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
           </option>
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-              {m.deviceType ? ` (${m.deviceType})` : ""}
-            </option>
-          ))}
-        </select>
-        {errors.modelId && <p className="mt-1.5 text-sm text-red-600">{errors.modelId}</p>}
-      </div>
+        ))}
+      </Select>
+
+      <Select
+        label="Model"
+        value={modelId}
+        disabled={!brandId || modelsLoading}
+        onChange={(e) => setModelId(e.target.value)}
+        error={errors.modelId}
+      >
+        <option value="">
+          {!brandId
+            ? "Önce marka seçin"
+            : modelsLoading
+              ? "Modeller yükleniyor…"
+              : "Model seçin"}
+        </option>
+        {models.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+            {m.deviceType ? ` (${m.deviceType})` : ""}
+          </option>
+        ))}
+      </Select>
 
       <Input
         label="Seri Numarası"
