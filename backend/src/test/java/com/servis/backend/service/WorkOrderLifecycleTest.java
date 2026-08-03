@@ -135,9 +135,9 @@ class WorkOrderLifecycleTest {
     @Test
     void statusChangeMessage_IncludesServiceNumberForLifecycleEvents() {
         assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "IN_PROGRESS").contains("SRV-1"));
-        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "IN_PROGRESS").contains("işlem başladı"));
-        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "READY_FOR_DELIVERY").contains("teslime hazır"));
-        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "DELIVERED").contains("teslim edildi"));
-        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "RESOLVED").contains("tamamlandı"));
+        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "IN_PROGRESS").contains("İşleme Alındı"));
+        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "READY_FOR_DELIVERY").contains("Teslime Hazır"));
+        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "DELIVERED").contains("Teslim Edildi"));
+        assertTrue(WorkOrderService.statusChangeMessage("SRV-1", "RESOLVED").contains("Teknik İşlem Tamamlandı"));
     }
 }

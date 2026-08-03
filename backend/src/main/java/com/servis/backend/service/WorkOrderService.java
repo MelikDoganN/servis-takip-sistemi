@@ -363,31 +363,9 @@ public class WorkOrderService {
                 log.warn("WhatsApp create bildirimi atlandı: müşteri telefonu yok (wo={})", saved.getId());
                 return;
             }
-            String serviceNo = displayServiceNumber(saved);
-            StringBuilder message = new StringBuilder();
-            message.append("Servis kaydınız oluşturuldu.\nServis No: ").append(serviceNo);
-            if (saved.getDevice() != null && saved.getDevice().getModel() != null) {
-                String brand = saved.getDevice().getModel().getBrand() != null
-                        ? saved.getDevice().getModel().getBrand().getName()
-                        : null;
-                String model = saved.getDevice().getModel().getName();
-                if (brand != null || model != null) {
-                    message.append("\nCihaz: ");
-                    if (brand != null) {
-                        message.append(brand);
-                        if (model != null) {
-                            message.append(" ");
-                        }
-                    }
-                    if (model != null) {
-                        message.append(model);
-                    }
-                }
-            }
-
             WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
             req.setPhone(phone);
-            req.setMessage(message.toString());
+            req.setMessage(buildWorkOrderCreatedMessage(saved));
             req.setEventType(WhatsAppNotificationRequest.EVENT_WORK_ORDER_CREATED);
             req.setWorkOrderId(saved.getId());
             req.setTargetStatus(WorkOrderStatus.OPEN.name());
@@ -408,10 +386,9 @@ public class WorkOrderService {
             String techName = technician.getUser() != null && technician.getUser().getFullName() != null
                     ? technician.getUser().getFullName()
                     : "teknisyen";
-            String serviceNo = displayServiceNumber(saved);
             WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
             req.setPhone(phone);
-            req.setMessage(serviceNo + " numaralı servis kaydınıza " + techName + " adlı teknisyen atanmıştır.");
+            req.setMessage(buildCustomerTechnicianAssignedMessage(displayServiceNumber(saved), techName));
             req.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_ASSIGNED);
             req.setWorkOrderId(saved.getId());
             req.setTechnicianId(technician.getId());
@@ -511,20 +488,42 @@ public class WorkOrderService {
         }
         String description = normalizeDescription(workOrder.getDescription());
         String priority = priorityLabelTr(workOrder.getPriority());
-        String eta = "Belirtilmedi";
-        if (workOrder.getEstimatedCompletionAt() != null) {
-            eta = workOrder.getEstimatedCompletionAt().format(ETA_FORMAT);
-        }
+        String eta = formatEstimatedCompletion(workOrder.getEstimatedCompletionAt());
 
         return "📋 Yeni İş Emri Atandı\n\n"
-                + "Servis No: " + serviceNo + "\n"
-                + "Müşteri: " + customerName + "\n"
-                + "Cihaz: " + deviceLabel + "\n"
-                + "Seri No: " + serial + "\n"
-                + "Arıza: " + description + "\n"
-                + "Öncelik: " + priority + "\n"
-                + "Tahmini Tamamlanma: " + eta + "\n\n"
-                + "Panelden iş emri detayını kontrol edebilirsiniz.";
+                + "🆔 Servis No\n" + serviceNo + "\n\n"
+                + "👤 Müşteri\n" + customerName + "\n\n"
+                + "📱 Cihaz\n" + deviceLabel + "\n\n"
+                + "🔢 Seri No\n" + serial + "\n\n"
+                + "📝 Arıza\n" + description + "\n\n"
+                + "⚡ Öncelik\n" + priority + "\n\n"
+                + "📅 Tahmini Tamamlanma\n" + eta + "\n\n"
+                + "İş emri detaylarını web panelinden kontrol edebilirsiniz.";
+    }
+
+    static String buildWorkOrderCreatedMessage(WorkOrder workOrder) {
+        String serviceNo = displayServiceNumber(workOrder);
+        String deviceLabel = resolveDeviceBrandModel(workOrder != null ? workOrder.getDevice() : null);
+        return "🔧 Servis Kaydınız Oluşturuldu\n\n"
+                + "🆔 Servis No\n" + serviceNo + "\n\n"
+                + "📱 Cihaz\n" + deviceLabel + "\n\n"
+                + "📌 Durum\nAçık\n\n"
+                + "Servis durumunuzu bu numarayla takip edebilirsiniz.";
+    }
+
+    static String buildCustomerTechnicianAssignedMessage(String serviceNumber, String technicianName) {
+        String sn = serviceNumber != null && !serviceNumber.isBlank() ? serviceNumber : "SRV-????-??????";
+        String name = technicianName != null && !technicianName.isBlank() ? technicianName.trim() : "teknisyen";
+        return "👨‍🔧 Teknisyen Atandı\n\n"
+                + "🆔 Servis No\n" + sn + "\n\n"
+                + "Cihazınız " + name + " adlı teknisyenimize atanmıştır.";
+    }
+
+    static String formatEstimatedCompletion(LocalDateTime value) {
+        if (value == null) {
+            return "Belirtilmedi";
+        }
+        return value.format(ETA_FORMAT);
     }
 
     static String resolveDeviceBrandModel(Device device) {
@@ -581,7 +580,10 @@ public class WorkOrderService {
                 log.warn("WhatsApp status bildirimi atlandı: müşteri telefonu yok (wo={})", updated.getId());
                 return;
             }
-            String message = statusChangeMessage(displayServiceNumber(updated), newStatus);
+            String message = statusChangeMessage(
+                    displayServiceNumber(updated),
+                    newStatus,
+                    updated.getCancellationReason());
             if (message == null) {
                 return;
             }
@@ -610,14 +612,14 @@ public class WorkOrderService {
 
     static String statusLabelTr(String status) {
         if (status == null) {
-            return "Bilinmiyor";
+            return "Belirtilmedi";
         }
         return switch (status.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> "Açık";
             case "ASSIGNED" -> "Teknisyen Atandı";
             case "IN_PROGRESS" -> "İşlemde";
             case "WAITING_PARTS" -> "Parça Bekliyor";
-            case "RESOLVED" -> "Tamamlandı";
+            case "RESOLVED" -> "Teknik İşlem Tamamlandı";
             case "READY_FOR_DELIVERY" -> "Teslime Hazır";
             case "DELIVERED" -> "Teslim Edildi";
             case "CLOSED" -> "Kapatıldı";
@@ -628,24 +630,48 @@ public class WorkOrderService {
 
     /** Geriye uyumluluk: yalnız status ile çağrı (testler). */
     static String statusChangeMessage(String status) {
-        return statusChangeMessage("SRV-????-??????", status);
+        return statusChangeMessage("SRV-????-??????", status, null);
     }
 
     static String statusChangeMessage(String serviceNumber, String status) {
+        return statusChangeMessage(serviceNumber, status, null);
+    }
+
+    static String statusChangeMessage(String serviceNumber, String status, String cancellationReason) {
         if (status == null) {
             return null;
         }
         String sn = serviceNumber != null && !serviceNumber.isBlank() ? serviceNumber : "SRV-????-??????";
+        String reason = normalizeDescription(cancellationReason);
         return switch (status) {
-            case "OPEN" -> sn + " numaralı servis kaydınız açıldı.";
-            case "ASSIGNED" -> sn + " numaralı servis kaydınıza teknisyen atandı.";
-            case "IN_PROGRESS" -> sn + " numaralı servis kaydınızda işlem başladı.";
-            case "WAITING_PARTS" -> sn + " numaralı servis kaydınız için parça bekleniyor.";
-            case "RESOLVED" -> sn + " numaralı servis kaydınız tamamlandı.";
-            case "READY_FOR_DELIVERY" -> sn + " numaralı servis kaydınız teslime hazır.";
-            case "DELIVERED" -> sn + " numaralı servis kaydınız teslim edildi.";
-            case "CLOSED" -> sn + " numaralı servis kaydınız kapatıldı.";
-            case "CANCELLED" -> sn + " numaralı servis kaydınız iptal edildi.";
+            case "OPEN" -> "🔧 Servis Kaydınız Oluşturuldu\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "📌 Durum\nAçık\n\n"
+                    + "Servis durumunuzu bu numarayla takip edebilirsiniz.";
+            case "ASSIGNED" -> "👨‍🔧 Teknisyen Atandı\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Cihazınız teknisyenimize atanmıştır.";
+            case "IN_PROGRESS" -> "🛠️ Cihazınız İşleme Alındı\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Teknik inceleme ve onarım işlemleri başlamıştır.";
+            case "WAITING_PARTS" -> "🧩 Parça Bekleniyor\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Onarım için gerekli parça beklenmektedir.";
+            case "RESOLVED" -> "✅ Teknik İşlem Tamamlandı\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Cihazınızın teknik işlemleri tamamlandı ve son kontroller yapılıyor.";
+            case "READY_FOR_DELIVERY" -> "🎉 Cihazınız Teslime Hazır\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Cihazınızı servisimizden teslim alabilirsiniz.";
+            case "DELIVERED" -> "📦 Cihazınız Teslim Edildi\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Bizi tercih ettiğiniz için teşekkür ederiz.";
+            case "CLOSED" -> "✅ Servis Kaydı Kapatıldı\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Servis kaydınız operasyonel olarak kapatılmıştır.";
+            case "CANCELLED" -> "❌ Servis Kaydı İptal Edildi\n\n"
+                    + "🆔 Servis No\n" + sn + "\n\n"
+                    + "Sebep:\n" + reason;
             default -> null;
         };
     }

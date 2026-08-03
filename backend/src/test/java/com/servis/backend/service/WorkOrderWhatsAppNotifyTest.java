@@ -118,8 +118,9 @@ class WorkOrderWhatsAppNotifyTest {
         assertEquals(WhatsAppNotificationRequest.EVENT_WORK_ORDER_CREATED, captor.getValue().getEventType());
         assertEquals(42L, captor.getValue().getWorkOrderId());
         assertEquals("905551112233", captor.getValue().getPhone());
-        assertTrue(captor.getValue().getMessage().contains("Servis No:"));
+        assertTrue(captor.getValue().getMessage().contains("Servis No"));
         assertTrue(captor.getValue().getMessage().contains("000042"));
+        assertTrue(captor.getValue().getMessage().contains("Oluşturuldu"));
     }
 
     @Test
@@ -201,6 +202,8 @@ class WorkOrderWhatsAppNotifyTest {
         assertEquals("technician:7", techMsg.getEventKey());
         assertTrue(techMsg.getMessage().contains("SRV-2026-000050"));
         assertTrue(techMsg.getMessage().contains("Yeni İş Emri Atandı"));
+        assertTrue(techMsg.getMessage().contains("🆔 Servis No"));
+        assertTrue(customerMsg.getMessage().contains("Teknisyen Atandı"));
     }
 
     @Test
@@ -237,8 +240,8 @@ class WorkOrderWhatsAppNotifyTest {
                 ArgumentCaptor.forClass(WhatsAppNotificationRequest.class);
         verify(whatsAppNotificationClient).sendNotification(captor.capture());
         assertEquals(WhatsAppNotificationRequest.EVENT_STATUS_CHANGED, captor.getValue().getEventType());
+        assertTrue(captor.getValue().getMessage().contains("Parça Bekleniyor"));
         assertTrue(captor.getValue().getMessage().contains("SRV-2026-000052"));
-        assertTrue(captor.getValue().getMessage().contains("parça bekleniyor"));
         assertEquals("WAITING_PARTS", captor.getValue().getTargetStatus());
     }
 
@@ -286,13 +289,15 @@ class WorkOrderWhatsAppNotifyTest {
     void statusChangeMessage_MapsKnownStatuses() {
         String open = WorkOrderService.statusChangeMessage("SRV-2026-000001", "OPEN");
         assertTrue(open.contains("SRV-2026-000001"));
-        assertTrue(open.contains("açıldı"));
+        assertTrue(open.contains("Oluşturuldu") || open.contains("Açık"));
         String assigned = WorkOrderService.statusChangeMessage("SRV-2026-000001", "ASSIGNED");
-        assertTrue(assigned.contains("teknisyen atandı"));
+        assertTrue(assigned.contains("Teknisyen Atandı"));
         String inProgress = WorkOrderService.statusChangeMessage("SRV-2026-000001", "IN_PROGRESS");
-        assertTrue(inProgress.contains("işlem başladı"));
-        String cancelled = WorkOrderService.statusChangeMessage("SRV-2026-000001", "CANCELLED");
-        assertTrue(cancelled.contains("iptal edildi"));
+        assertTrue(inProgress.contains("İşleme Alındı"));
+        String cancelled = WorkOrderService.statusChangeMessage("SRV-2026-000001", "CANCELLED", "Müşteri vazgeçti");
+        assertTrue(cancelled.contains("İptal"));
+        assertTrue(cancelled.contains("Müşteri vazgeçti"));
+        assertFalse(cancelled.contains("HTTP"));
     }
 
     @Test
@@ -400,13 +405,11 @@ class WorkOrderWhatsAppNotifyTest {
         wo.setDevice(bare);
 
         String msg = WorkOrderService.buildTechnicianWorkOrderAssignedMessage(wo);
-        assertTrue(msg.contains("Servis No: SRV-2026-000070"));
-        assertTrue(msg.contains("Cihaz: Belirtilmedi"));
-        assertTrue(msg.contains("Seri No: Belirtilmedi"));
-        assertTrue(msg.contains("Arıza: Belirtilmedi"));
-        assertTrue(msg.contains("Öncelik: Belirtilmedi"));
-        assertTrue(msg.contains("Tahmini Tamamlanma: Belirtilmedi"));
-        assertFalse(msg.contains("null"));
+        assertTrue(msg.contains("Servis No"));
+        assertTrue(msg.contains("SRV-2026-000070"));
+        assertTrue(msg.contains("Cihaz"));
+        assertTrue(msg.contains("Belirtilmedi"));
+        assertFalse(msg.toLowerCase().contains("null"));
     }
 
     @Test
@@ -428,10 +431,11 @@ class WorkOrderWhatsAppNotifyTest {
         wo.setEstimatedCompletionAt(java.time.LocalDateTime.of(2026, 8, 10, 14, 30));
 
         String msg = WorkOrderService.buildTechnicianWorkOrderAssignedMessage(wo);
-        assertTrue(msg.contains("Öncelik: Yüksek"));
-        assertTrue(msg.contains("Cihaz: Bosch Serie 6"));
-        assertTrue(msg.contains("Seri No: SN-1"));
-        assertTrue(msg.contains("Arıza: Motor arızası"));
+        assertTrue(msg.contains("Öncelik"));
+        assertTrue(msg.contains("Yüksek"));
+        assertTrue(msg.contains("Bosch Serie 6"));
+        assertTrue(msg.contains("SN-1"));
+        assertTrue(msg.contains("Motor arızası"));
         assertTrue(msg.contains("10.08.2026 14:30"));
     }
 

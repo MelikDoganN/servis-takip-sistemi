@@ -32,7 +32,14 @@ RATE_LIMIT_WINDOW_SEC = int(os.getenv("BOT_RATE_LIMIT_WINDOW_SEC", "60"))
 
 bot_token = None
 
-OPEN_CUSTOMER_STATUSES = {"OPEN", "ASSIGNED", "WAITING_PARTS", "RESOLVED", "IN_PROGRESS"}
+OPEN_CUSTOMER_STATUSES = {
+    "OPEN",
+    "ASSIGNED",
+    "WAITING_PARTS",
+    "RESOLVED",
+    "IN_PROGRESS",
+    "READY_FOR_DELIVERY",
+}
 OPEN_TECH_STATUSES = {"ASSIGNED", "WAITING_PARTS", "IN_PROGRESS"}
 
 STATUS_LABELS_TR = {
@@ -40,18 +47,97 @@ STATUS_LABELS_TR = {
     "ASSIGNED": "Teknisyen Atandı",
     "IN_PROGRESS": "İşlemde",
     "WAITING_PARTS": "Parça Bekliyor",
-    "RESOLVED": "Çözüldü",
+    "RESOLVED": "Teknik İşlem Tamamlandı",
+    "READY_FOR_DELIVERY": "Teslime Hazır",
+    "DELIVERED": "Teslim Edildi",
     "CLOSED": "Kapatıldı",
     "CANCELLED": "İptal Edildi",
 }
+
+STATUS_LIST_EMOJI = {
+    "OPEN": "📌",
+    "ASSIGNED": "📌",
+    "IN_PROGRESS": "🛠️",
+    "WAITING_PARTS": "🟡",
+    "RESOLVED": "✅",
+    "READY_FOR_DELIVERY": "🎉",
+    "DELIVERED": "📦",
+    "CLOSED": "✅",
+    "CANCELLED": "❌",
+}
+
+TECH_COMMAND_STATUS = {
+    "başla": "IN_PROGRESS",
+    "basla": "IN_PROGRESS",
+    "parça": "WAITING_PARTS",
+    "parca": "WAITING_PARTS",
+    "devam": "IN_PROGRESS",
+    "tamamla": "RESOLVED",
+}
+
+GREETING_WORDS = {
+    "merhaba",
+    "selam",
+    "menu",
+    "menü",
+    "yardim",
+    "yardım",
+    "!yardim",
+    "!yardım",
+}
+
+MSG_NOT_FOUND = "🔎 Servis kaydı bulunamadı."
+MSG_UNKNOWN_COMMAND = (
+    "⚠️ İşleminizi anlayamadım. “Yardım” yazarak seçenekleri görebilirsiniz."
+)
+MSG_SYSTEM_ERROR = (
+    "⚠️ İşleminiz şu anda tamamlanamadı. Lütfen daha sonra tekrar deneyin."
+)
+MSG_FORBIDDEN = "⛔ Bu iş emri size atanmış değil."
+MSG_INVALID_TRANSITION = (
+    "⚠️ Bu kayıt mevcut durumundan seçtiğiniz duruma geçirilemez."
+)
 
 SERVICE_NUMBER_RE = re.compile(r"^SRV-\d{4}-\d{6,}$", re.IGNORECASE)
 
 
 def work_order_status_label(status):
     if not status:
-        return "Belirtilmemiş"
-    return STATUS_LABELS_TR.get(str(status).upper(), str(status))
+        return "Belirtilmedi"
+    return STATUS_LABELS_TR.get(str(status).upper(), "Belirtilmedi")
+
+
+def first_name_from_full(full_name):
+    if not full_name or not str(full_name).strip():
+        return None
+    return str(full_name).strip().split()[0]
+
+
+def display_or_default(value, default="Belirtilmedi"):
+    if value is None:
+        return default
+    cleaned = str(value).strip()
+    if not cleaned or cleaned == "." or cleaned.lower() == "null":
+        return default
+    return cleaned
+
+
+def format_eta(value):
+    if value is None:
+        return "Belirtilmedi"
+    text = str(value).strip()
+    if not text:
+        return "Belirtilmedi"
+    # ISO: 2026-08-10T14:30:00 -> 10.08.2026 14:30
+    try:
+        if "T" in text:
+            date_part, time_part = text.split("T", 1)
+            y, m, d = date_part.split("-")
+            hm = time_part[:5]
+            return f"{d}.{m}.{y} {hm}"
+    except Exception:
+        pass
+    return text
 
 
 def normalize_service_ref(raw):
@@ -82,63 +168,237 @@ def parse_status_command(text):
         return None, False
     raw = text.strip()
     lowered = raw.lower()
-    # !durum / durum önekini kaldır
-    for prefix in ("!durum", "durum"):
+    for prefix in ("!durum", "durum", "servislerim", "!servislerim"):
         if lowered == prefix or lowered.startswith(prefix + " "):
             rest = raw[len(prefix):].strip()
             if not rest:
                 return None, True
             return normalize_service_ref(rest), False
-    # yalnız servis no veya yalnız numeric
     candidate = normalize_service_ref(raw)
     if candidate and (is_service_number(candidate) or candidate.isdigit()):
         return candidate, False
     return None, False
 
 
+def parse_tech_command(text):
+    """
+    başla SRV-... | parça 12 | devam SRV-... | tamamla SRV-...
+    Dönüş: (command_key, status|None, ref|None) veya (None, None, None)
+    """
+    if not text:
+        return None, None, None
+    parts = text.strip().split()
+    if not parts:
+        return None, None, None
+    cmd = parts[0].lower().lstrip("!")
+    # Turkish ı/i normalization for matching keys already listed both ways
+    status = TECH_COMMAND_STATUS.get(cmd)
+    if not status:
+        return None, None, None
+    if len(parts) < 2:
+        return cmd, status, None
+    return cmd, status, normalize_service_ref(parts[1])
+
+
+def is_greeting(text):
+    if not text:
+        return False
+    cleaned = text.strip().lower().rstrip("!.")
+    return cleaned in GREETING_WORDS
+
+
 def friendly_not_found_message():
-    return (
-        "Servis kaydı bulunamadı. Servis numaranızı şu biçimde yazın:\n"
-        "durum SRV-2026-000017"
-    )
+    return MSG_NOT_FOUND
 
 
 def format_device_label(wo):
-    device = wo.get("device") or {}
+    device = (wo or {}).get("device") or {}
     model = device.get("model") or {}
     brand = (model.get("brand") or {}).get("name")
     model_name = model.get("name")
-    parts = [p for p in (brand, model_name) if p]
+    parts = [p for p in (brand, model_name) if p and str(p).strip()]
     if parts:
-        return " ".join(parts)
-    serial = device.get("serialNumber")
-    return serial if serial else "Belirtilmemiş"
+        return " ".join(str(p).strip() for p in parts)
+    return "Belirtilmedi"
 
 
 def format_description(wo):
-    desc = wo.get("description")
-    if desc is None:
-        return "Belirtilmemiş"
-    cleaned = str(desc).strip()
-    if not cleaned or cleaned == ".":
-        return "Belirtilmemiş"
-    return cleaned
+    return display_or_default((wo or {}).get("description"))
+
+
+def format_serial(wo):
+    device = (wo or {}).get("device") or {}
+    return display_or_default(device.get("serialNumber"))
+
+
+def format_technician_name(wo):
+    tech = (wo or {}).get("technician") or {}
+    user = tech.get("user") or {}
+    name = user.get("fullName")
+    if name and str(name).strip():
+        return str(name).strip()
+    return "Henüz atanmadı"
 
 
 def format_work_order_detail(wo):
-    lines = ["🔧 Servis Kaydı"]
-    service_no = wo.get("serviceNumber") or "Belirtilmemiş"
-    lines.append(f"Servis No: {service_no}")
-    lines.append(f"Durum: {work_order_status_label(wo.get('status'))}")
-    lines.append(f"Cihaz: {format_device_label(wo)}")
-    lines.append(f"Açıklama: {format_description(wo)}")
-    tech = wo.get("technician") or {}
-    user = tech.get("user") or {}
-    if user.get("fullName"):
-        lines.append(f"Teknisyen: {user['fullName']}")
-    else:
-        lines.append("Teknisyen: Henüz atanmadı")
+    status = str((wo or {}).get("status") or "").upper()
+    lines = [
+        "🔧 Servis Kaydı",
+        "",
+        "🆔 Servis No",
+        display_or_default((wo or {}).get("serviceNumber")),
+        "",
+        "📱 Cihaz",
+        format_device_label(wo),
+        "",
+        "🔢 Seri No",
+        format_serial(wo),
+        "",
+        "📌 Durum",
+        work_order_status_label(status),
+        "",
+        "👨‍🔧 Teknisyen",
+        format_technician_name(wo),
+        "",
+        "📝 Arıza Açıklaması",
+        format_description(wo),
+        "",
+        "📅 Tahmini Tamamlanma",
+        format_eta((wo or {}).get("estimatedCompletionAt")),
+    ]
+    if status == "READY_FOR_DELIVERY":
+        lines.extend(["", "✅ Cihazınız teslim alınmaya hazırdır."])
+    elif status == "DELIVERED":
+        lines.extend(["", "📦 Cihazınız teslim edilmiştir."])
+    elif status == "CANCELLED":
+        reason = display_or_default((wo or {}).get("cancellationReason"))
+        lines.extend(["", "❌ Servis kaydınız iptal edilmiştir.", f"Sebep: {reason}"])
     return "\n".join(lines)
+
+
+def format_customer_service_list(orders):
+    if not orders:
+        return (
+            "📭 Açık servis kaydınız bulunmuyor.\n\n"
+            "Tamamlanmış kayıtlarınız için servisimizle iletişime geçebilirsiniz."
+        )
+    lines = ["📋 Açık Servis Kayıtlarınız", ""]
+    for idx, o in enumerate(orders[:8], start=1):
+        sn = display_or_default(o.get("serviceNumber"), f"#{o.get('id')}")
+        status = str(o.get("status") or "").upper()
+        emoji = STATUS_LIST_EMOJI.get(status, "📌")
+        lines.append(f"{idx}️⃣ {sn}")
+        lines.append(f"📱 {format_device_label(o)}")
+        lines.append(f"{emoji} {work_order_status_label(status)}")
+        lines.append("")
+    example = orders[0].get("serviceNumber") or "SRV-2026-000021"
+    lines.append("Detay için servis numarasını yazabilirsiniz:")
+    lines.append("")
+    lines.append(example)
+    return "\n".join(lines)
+
+
+def format_tech_service_list(orders):
+    if not orders:
+        return "📭 Size atanmış aktif iş emri bulunmuyor."
+    lines = ["📋 Aktif İş Emirleriniz", ""]
+    for idx, o in enumerate(orders[:8], start=1):
+        sn = display_or_default(o.get("serviceNumber"), f"#{o.get('id')}")
+        status = str(o.get("status") or "").upper()
+        emoji = STATUS_LIST_EMOJI.get(status, "📌")
+        lines.append(f"{idx}️⃣ {sn}")
+        lines.append(f"📱 {format_device_label(o)}")
+        lines.append(f"{emoji} {work_order_status_label(status)}")
+        lines.append("")
+    example = orders[0].get("serviceNumber") or "SRV-2026-000021"
+    lines.append("Detay için servis numarasını yazabilirsiniz:")
+    lines.append("")
+    lines.append(example)
+    return "\n".join(lines)
+
+
+def tech_help_message():
+    return (
+        "❓ Teknisyen Yardım\n\n"
+        "Kullanabileceğiniz işlemler:\n\n"
+        "📋 Atanan işler:\n"
+        "işlerim\n\n"
+        "▶️ İşleme başla:\n"
+        "başla SRV-2026-000021\n\n"
+        "🧩 Parça bekliyor:\n"
+        "parça SRV-2026-000021\n\n"
+        "🔄 İşleme devam et:\n"
+        "devam SRV-2026-000021\n\n"
+        "✅ Teknik işlemi tamamla:\n"
+        "tamamla SRV-2026-000021"
+    )
+
+
+def customer_help_message():
+    return (
+        "❓ Yardım\n\n"
+        "Kullanabileceğiniz işlemler:\n\n"
+        "📋 Servislerim\n"
+        "🛡️ Garanti Sorgula\n\n"
+        "Detay için servis numaranızı yazabilirsiniz:\n"
+        "SRV-2026-000021"
+    )
+
+
+def format_tech_update_success(service_no, new_status):
+    return (
+        "✅ İş emri güncellendi\n\n"
+        "🆔 Servis No\n"
+        f"{display_or_default(service_no)}\n\n"
+        "📌 Yeni Durum\n"
+        f"{work_order_status_label(new_status)}"
+    )
+
+
+def warranty_status_label(status):
+    if not status:
+        return "Garanti durumu belirlenemedi"
+    key = str(status).upper()
+    mapping = {
+        "AKTIF": "🟢 Garanti devam ediyor",
+        "ACTIVE": "🟢 Garanti devam ediyor",
+        "SURESI_DOLMUS": "🔴 Garanti süresi dolmuş",
+        "EXPIRED": "🔴 Garanti süresi dolmuş",
+        "TARIH_EKSIK": "⚠️ Garanti hesabı için tarih bilgisi eksik",
+        "TANIMLANMAMIS": "⚠️ Bu cihaz için garanti tanımı bulunamadı",
+        "UNKNOWN": "⚠️ Garanti durumu belirlenemedi",
+    }
+    return mapping.get(key, "⚠️ Garanti durumu belirlenemedi")
+
+
+def format_warranty_reply(data, serial):
+    brand = data.get("brand")
+    model = data.get("model") or data.get("deviceName")
+    device_line = " ".join(p for p in (brand, model) if p) or "Belirtilmedi"
+    start = data.get("warrantyStart") or data.get("startDate") or "Belirtilmedi"
+    end = data.get("warrantyEnd") or data.get("endDate") or "Belirtilmedi"
+    return (
+        "✅ Garanti Bilgisi\n\n"
+        "📱 Cihaz\n"
+        f"{device_line}\n\n"
+        "🔢 Seri No\n"
+        f"{display_or_default(data.get('serialNumber'), serial)}\n\n"
+        "📅 Garanti Başlangıcı\n"
+        f"{display_or_default(start)}\n\n"
+        "📅 Garanti Bitişi\n"
+        f"{display_or_default(end)}\n\n"
+        "Durum:\n"
+        f"{warranty_status_label(data.get('warrantyStatus'))}"
+    )
+
+
+def warranty_prompt_message():
+    return (
+        "🛡️ Garanti Sorgulama\n\n"
+        "Lütfen cihazınızın seri numarasını yazın.\n\n"
+        "Örnek:\n"
+        "SAM-A54-20260001"
+    )
 
 
 class ConversationStateStore:
@@ -317,42 +577,6 @@ def clear_conversation(phone):
     conversation_store.clear(phone)
 
 
-def warranty_status_label(status):
-    if not status:
-        return "Garanti durumu belirlenemedi."
-    key = str(status).upper()
-    mapping = {
-        "AKTIF": "Garanti devam ediyor.",
-        "ACTIVE": "Garanti devam ediyor.",
-        "SURESI_DOLMUS": "Garanti süresi dolmuş.",
-        "EXPIRED": "Garanti süresi dolmuş.",
-        "TARIH_EKSIK": "Garanti hesabı için satın alma veya kurulum tarihi eksik.",
-        "TANIMLANMAMIS": "Bu cihaz için garanti tanımı bulunamadı.",
-        "UNKNOWN": "Garanti durumu belirlenemedi.",
-    }
-    return mapping.get(key, "Garanti durumu belirlenemedi.")
-
-
-def format_warranty_reply(data, serial):
-    lines = ["Garanti Sorgulama Sonucu"]
-    lines.append(f"Seri No: {data.get('serialNumber') or serial}")
-    if data.get("customerName"):
-        lines.append(f"Müşteri: {data['customerName']}")
-    brand = data.get("brand")
-    model = data.get("model") or data.get("deviceName")
-    if brand or model:
-        device_line = " ".join(p for p in (brand, model) if p)
-        lines.append(f"Cihaz: {device_line}")
-    lines.append(f"Durum: {warranty_status_label(data.get('warrantyStatus'))}")
-    start = data.get("warrantyStart") or data.get("startDate")
-    end = data.get("warrantyEnd") or data.get("endDate")
-    if start:
-        lines.append(f"Başlangıç: {start}")
-    if end:
-        lines.append(f"Bitiş: {end}")
-    return "\n".join(lines)
-
-
 async def claim_inbound_message(message_id, phone, message_type, command_summary):
     if not message_id or not WHATSAPP_BOT_API_KEY:
         return True
@@ -395,12 +619,14 @@ async def log_bot_interaction(**payload):
         pass
 
 
-async def get_user_role(phone: str):
+async def get_user_profile(phone: str):
+    """Teknisyen önce, sonra müşteri. Dönüş: {role, firstName, fullName}."""
+    profile = {"role": "UNREGISTERED", "firstName": None, "fullName": None}
     try:
         token = get_token()
     except Exception:
         log.warning("Rol tespiti için token alınamadı")
-        return "UNREGISTERED"
+        return profile
 
     phone_q = normalize_phone(phone) or phone
     headers = bot_headers({"Authorization": f"Bearer {token}"})
@@ -410,14 +636,30 @@ async def get_user_role(phone: str):
             headers=headers,
         )
         if resp.status_code == 200:
-            return "TECHNICIAN"
+            data = resp.json()
+            user = (data or {}).get("user") or {}
+            full = user.get("fullName")
+            profile["role"] = "TECHNICIAN"
+            profile["fullName"] = full
+            profile["firstName"] = first_name_from_full(full)
+            return profile
         resp = await client.get(
             f"{BACKEND_URL}/api/customers/by-whatsapp/{phone_q}",
             headers=headers,
         )
         if resp.status_code == 200:
-            return "CUSTOMER"
-        return "UNREGISTERED"
+            data = resp.json()
+            full = (data or {}).get("fullName")
+            profile["role"] = "CUSTOMER"
+            profile["fullName"] = full
+            profile["firstName"] = first_name_from_full(full)
+            return profile
+        return profile
+
+
+async def get_user_role(phone: str):
+    profile = await get_user_profile(phone)
+    return profile["role"]
 
 
 async def send_whatsapp_message(to_number: str, message: str) -> bool:
@@ -511,29 +753,19 @@ def handle_customer_status_list(phone):
             params={"page": 0, "size": 20, "customerWhatsapp": phone_q},
         )
         if resp.status_code != 200:
-            return "Servis kayıtlarınız şu an alınamadı. Lütfen daha sonra tekrar deneyin."
+            return MSG_SYSTEM_ERROR
         orders = resp.json().get("content", [])
         open_orders = [o for o in orders if o.get("status") in OPEN_CUSTOMER_STATUSES]
-        if not open_orders:
-            return "Açık servis kaydınız bulunmuyor."
-        if len(open_orders) == 1:
-            return format_work_order_detail(open_orders[0])
-        lines = ["Açık servis kayıtlarınız:"]
-        for idx, o in enumerate(open_orders[:8], start=1):
-            sn = o.get("serviceNumber") or f"#{o.get('id')}"
-            lines.append(f"{idx}. {sn} — {work_order_status_label(o.get('status'))}")
-        lines.append("")
-        lines.append("Detay için:")
-        example = open_orders[0].get("serviceNumber") or "SRV-2026-000017"
-        lines.append(f"durum {example}")
-        set_conversation(
-            phone,
-            "AWAIT_STATUS_PICK",
-            orders=[o.get("serviceNumber") or str(o["id"]) for o in open_orders[:8]],
-        )
-        return "\n".join(lines)
+        text = format_customer_service_list(open_orders)
+        if open_orders:
+            set_conversation(
+                phone,
+                "AWAIT_STATUS_PICK",
+                orders=[o.get("serviceNumber") or str(o["id"]) for o in open_orders[:8]],
+            )
+        return text
     except Exception:
-        return "Servis kayıtlarınız şu an alınamadı. Lütfen daha sonra tekrar deneyin."
+        return MSG_SYSTEM_ERROR
 
 
 def handle_status_lookup(phone, ref):
@@ -560,12 +792,13 @@ def handle_status_lookup(phone, ref):
             return format_work_order_detail(resp.json())
         return friendly_not_found_message()
     except Exception:
-        return friendly_not_found_message()
+        return MSG_SYSTEM_ERROR
 
 
 def handle_status_by_id(phone, work_order_id):
     """Geriye uyumluluk sarmalayıcısı."""
     return handle_status_lookup(phone, work_order_id)
+
 
 def handle_warranty_query(phone, serial):
     phone_q = normalize_phone(phone) or phone
@@ -577,62 +810,121 @@ def handle_warranty_query(phone, serial):
         if resp.status_code == 200:
             return format_warranty_reply(resp.json(), serial)
         if resp.status_code in (404, 403):
-            return "Bu seri numarasıyla cihaz bulunamadı."
-        return f"Sorgu başarısız (HTTP {resp.status_code})"
-    except Exception as e:
-        return f"Bağlantı hatası: {type(e).__name__}"
+            return (
+                "❌ Bu seri numarasına ait garanti kaydı bulunamadı.\n\n"
+                "Seri numarasını kontrol edip tekrar deneyebilirsiniz."
+            )
+        return (
+            "⚠️ Garanti bilgisi şu anda alınamıyor.\n\n"
+            "Lütfen daha sonra tekrar deneyin."
+        )
+    except Exception:
+        return (
+            "⚠️ Garanti bilgisi şu anda alınamıyor.\n\n"
+            "Lütfen daha sonra tekrar deneyin."
+        )
+
+
+def _list_tech_open_orders(phone):
+    phone_q = normalize_phone(phone) or phone
+    resp = _get_with_auth(
+        f"{BACKEND_URL}/api/workorders",
+        params={"page": 0, "size": 20, "technicianWhatsapp": phone_q},
+    )
+    if resp.status_code != 200:
+        return None, MSG_SYSTEM_ERROR
+    orders = [
+        o for o in resp.json().get("content", [])
+        if o.get("status") in OPEN_TECH_STATUSES
+    ]
+    return orders, None
+
+
+def find_tech_owned_work_order(phone, ref):
+    """Teknisyenin kendi listesinde ref (SRV/id) ile iş emri bul."""
+    orders, err = _list_tech_open_orders(phone)
+    if err:
+        return None, err
+    cleaned = normalize_service_ref(ref)
+    if not cleaned:
+        return None, friendly_not_found_message()
+    for o in orders:
+        sn = str(o.get("serviceNumber") or "").upper()
+        oid = str(o.get("id") or "")
+        if cleaned == sn or cleaned == oid:
+            return o, None
+    # Kapalı/aktif dışı da olabilir — tam listeden dene
+    phone_q = normalize_phone(phone) or phone
+    try:
+        resp = _get_with_auth(
+            f"{BACKEND_URL}/api/workorders",
+            params={"page": 0, "size": 50, "technicianWhatsapp": phone_q},
+        )
+        if resp.status_code == 200:
+            for o in resp.json().get("content", []):
+                sn = str(o.get("serviceNumber") or "").upper()
+                oid = str(o.get("id") or "")
+                if cleaned == sn or cleaned == oid:
+                    return o, None
+    except Exception:
+        pass
+    return None, MSG_FORBIDDEN
 
 
 def handle_tech_list(phone):
-    phone_q = normalize_phone(phone) or phone
     try:
-        resp = _get_with_auth(
-            f"{BACKEND_URL}/api/workorders",
-            params={"page": 0, "size": 10, "technicianWhatsapp": phone_q},
-        )
-        if resp.status_code != 200:
-            return f"Backend'den veri alınamadı (HTTP {resp.status_code})"
-        orders = resp.json().get("content", [])
-        if not orders:
-            return "Size atanmış iş emri bulunmuyor."
-        lines = ["İş Emirleriniz:"]
-        for o in orders[:5]:
-            desc = (o.get("description") or "")[:20]
-            lines.append(f"ID: {o['id']} - {o['status']} - {desc}...")
-        return "\n".join(lines)
-    except Exception as e:
-        return f"Bağlantı hatası: {type(e).__name__}"
+        orders, err = _list_tech_open_orders(phone)
+        if err:
+            return err
+        text = format_tech_service_list(orders)
+        if orders:
+            set_conversation(
+                phone,
+                "AWAIT_TECH_PICK",
+                orders=[o.get("serviceNumber") or str(o["id"]) for o in orders[:8]],
+            )
+        return text
+    except Exception:
+        return MSG_SYSTEM_ERROR
 
 
-def handle_tech_update_prompt(phone):
-    phone_q = normalize_phone(phone) or phone
+def handle_tech_update_prompt(phone, pending_command=None):
     try:
-        resp = _get_with_auth(
-            f"{BACKEND_URL}/api/workorders",
-            params={"page": 0, "size": 20, "technicianWhatsapp": phone_q},
-        )
-        if resp.status_code != 200:
-            return f"Backend'den veri alınamadı (HTTP {resp.status_code})"
-        orders = [
-            o for o in resp.json().get("content", [])
-            if o.get("status") in OPEN_TECH_STATUSES
-        ]
+        orders, err = _list_tech_open_orders(phone)
+        if err:
+            return err
         if not orders:
-            return "Güncellenebilir açık iş emriniz yok."
-        lines = ["Atanmış açık iş emirleriniz:"]
-        for o in orders[:8]:
-            desc = (o.get("description") or "")[:25]
-            lines.append(f"ID {o['id']} — {o.get('status')} — {desc}")
-        lines.append("Güncellemek için: !guncelle [ID] [DURUM]")
-        lines.append("Örnek: !guncelle 12 IN_PROGRESS")
-        lines.append("Durumlar: IN_PROGRESS, WAITING_PARTS, RESOLVED, CANCELLED")
-        set_conversation(phone, "AWAIT_TECH_UPDATE")
+            return "📭 Güncellenebilir aktif iş emriniz yok."
+        lines = ["📋 Güncellenebilir İş Emirleriniz", ""]
+        for idx, o in enumerate(orders[:8], start=1):
+            sn = display_or_default(o.get("serviceNumber"), f"#{o.get('id')}")
+            status = str(o.get("status") or "").upper()
+            emoji = STATUS_LIST_EMOJI.get(status, "📌")
+            lines.append(f"{idx}️⃣ {sn}")
+            lines.append(f"{emoji} {work_order_status_label(status)}")
+            lines.append("")
+        example = orders[0].get("serviceNumber") or "SRV-2026-000021"
+        if pending_command:
+            lines.append(f"Servis numarasını yazın. Örnek: {example}")
+            set_conversation(
+                phone,
+                "AWAIT_TECH_CMD_REF",
+                command=pending_command,
+                orders=[o.get("serviceNumber") or str(o["id"]) for o in orders[:8]],
+            )
+        else:
+            lines.append("Örnek komutlar:")
+            lines.append(f"başla {example}")
+            lines.append(f"parça {example}")
+            lines.append(f"devam {example}")
+            lines.append(f"tamamla {example}")
+            set_conversation(phone, "AWAIT_TECH_UPDATE")
         return "\n".join(lines)
-    except Exception as e:
-        return f"Bağlantı hatası: {type(e).__name__}"
+    except Exception:
+        return MSG_SYSTEM_ERROR
 
 
-def handle_tech_update(phone, work_order_id, new_status):
+def handle_tech_update(phone, work_order_id, new_status, service_no=None):
     phone_q = normalize_phone(phone) or phone
     try:
         resp = _put_with_auth(
@@ -645,30 +937,115 @@ def handle_tech_update(phone, work_order_id, new_status):
         )
         if resp.status_code == 200:
             clear_conversation(phone)
-            return f"İş emri {work_order_id} durumu {new_status} olarak güncellendi."
+            body = {}
+            try:
+                body = resp.json()
+            except Exception:
+                body = {}
+            sn = service_no or body.get("serviceNumber") or str(work_order_id)
+            return format_tech_update_success(sn, new_status)
         if resp.status_code in (403, 404):
-            return "Bu iş emrini güncelleyemezsiniz veya bulunamadı."
-        return f"Güncellenemedi. Hata: {resp.status_code}"
-    except Exception as e:
-        return f"Bağlantı hatası: {type(e).__name__}"
+            return MSG_FORBIDDEN
+        if resp.status_code == 400:
+            return MSG_INVALID_TRANSITION
+        return MSG_SYSTEM_ERROR
+    except Exception:
+        return MSG_SYSTEM_ERROR
 
 
-def welcome_menu(role):
-    if role == "TECHNICIAN":
-        buttons = [
-            {"type": "reply", "reply": {"id": "btn_islist", "title": "İş Emirlerim"}},
-            {"type": "reply", "reply": {"id": "btn_guncelle", "title": "Durum Güncelle"}},
-            {"type": "reply", "reply": {"id": "btn_yardim", "title": "Yardım"}},
-        ]
-        body_text = "Hoş geldiniz. Yapmak istediğiniz işlemi seçin:"
+def handle_tech_command(phone, command_key, status, ref):
+    if not ref:
+        return handle_tech_update_prompt(phone, pending_command=command_key)
+    wo, err = find_tech_owned_work_order(phone, ref)
+    if err:
+        return err
+    return handle_tech_update(
+        phone,
+        wo.get("id"),
+        status,
+        service_no=wo.get("serviceNumber"),
+    )
+
+
+def welcome_menu(role, first_name=None):
+    if first_name:
+        greeting = f"👋 Merhaba {first_name}"
     else:
+        greeting = "👋 Merhaba"
+
+    if role == "TECHNICIAN":
+        body_text = (
+            f"{greeting}\n\n"
+            "👨‍🔧 Teknisyen İşlem Paneline hoş geldiniz.\n\n"
+            "Aşağıdaki işlemlerden birini seçebilirsiniz:"
+        )
         buttons = [
-            {"type": "reply", "reply": {"id": "btn_garanti", "title": "Garanti Sorgula"}},
-            {"type": "reply", "reply": {"id": "btn_durum", "title": "Servis Durumu"}},
+            {"type": "reply", "reply": {"id": "btn_islist", "title": "Atanan İşlerim"}},
+            {"type": "reply", "reply": {"id": "btn_islem", "title": "İşlem Güncelle"}},
             {"type": "reply", "reply": {"id": "btn_yardim", "title": "Yardım"}},
         ]
-        body_text = "Hoş geldiniz. Yapmak istediğiniz işlemi seçin:"
-    return body_text, buttons
+        text_fallback = (
+            f"{body_text}\n\n"
+            "📋 Atanan İşlerim — işlerim\n"
+            "▶️ İşleme Başla — başla SRV-...\n"
+            "🧩 Parça Bekliyor — parça SRV-...\n"
+            "✅ İşlemi Tamamla — tamamla SRV-...\n"
+            "❓ Yardım — yardım"
+        )
+    else:
+        body_text = (
+            f"{greeting}\n\n"
+            "🔧 Servis Takip Asistanına hoş geldiniz.\n\n"
+            "Aşağıdaki işlemlerden birini seçebilirsiniz:"
+        )
+        buttons = [
+            {"type": "reply", "reply": {"id": "btn_durum", "title": "Servislerim"}},
+            {"type": "reply", "reply": {"id": "btn_garanti", "title": "Garanti Sorgula"}},
+            {"type": "reply", "reply": {"id": "btn_yardim", "title": "Yardım"}},
+        ]
+        text_fallback = (
+            f"{body_text}\n\n"
+            "📋 Servislerim\n"
+            "🛡️ Garanti Sorgula\n"
+            "❓ Yardım"
+        )
+    return body_text, buttons, text_fallback
+
+
+def tech_action_submenu():
+    body = (
+        "🛠️ İşlem Güncelle\n\n"
+        "Yapmak istediğiniz işlemi seçin:"
+    )
+    buttons = [
+        {"type": "reply", "reply": {"id": "btn_basla", "title": "İşleme Başla"}},
+        {"type": "reply", "reply": {"id": "btn_parca", "title": "Parça Bekliyor"}},
+        {"type": "reply", "reply": {"id": "btn_tamamla", "title": "Tamamla"}},
+    ]
+    fallback = (
+        f"{body}\n\n"
+        "▶️ başla SRV-...\n"
+        "🧩 parça SRV-...\n"
+        "🔄 devam SRV-...\n"
+        "✅ tamamla SRV-..."
+    )
+    return body, buttons, fallback
+
+
+async def send_menu(phone, role, first_name=None):
+    body_text, buttons, fallback = welcome_menu(role, first_name)
+    ok = await send_interactive_buttons(phone, body_text, buttons)
+    if ok:
+        return "Menü gönderildi."
+    return fallback
+
+
+async def send_tech_action_menu(phone):
+    body, buttons, fallback = tech_action_submenu()
+    ok = await send_interactive_buttons(phone, body, buttons)
+    if ok:
+        return "Menü gönderildi."
+    return fallback
 
 
 @app.get("/webhook")
@@ -723,18 +1100,24 @@ async def webhook(request: Request):
                 button_id = interactive["button_reply"]["id"]
                 command_summary = button_id
                 log.info("Buton tıklandı: id=%s phone=%s", button_id, mask_phone(phone))
-                if button_id == "btn_islist":
-                    text = "!isliste"
-                elif button_id == "btn_guncelle":
-                    text = "!guncelle"
-                elif button_id == "btn_garanti":
-                    text = "!garanti"
-                elif button_id == "btn_durum":
-                    text = "!durum"
-                elif button_id == "btn_yardim":
-                    text = "!yardim"
-                else:
+                button_map = {
+                    "btn_islist": "!isliste",
+                    "btn_guncelle": "!islem",
+                    "btn_islem": "!islem",
+                    "btn_garanti": "!garanti",
+                    "btn_durum": "!durum",
+                    "btn_servislerim": "!durum",
+                    "btn_yardim": "!yardim",
+                    "btn_basla": "!basla",
+                    "btn_parca": "!parca",
+                    "btn_tamamla": "!tamamla",
+                    "btn_devam": "!devam",
+                }
+                text = button_map.get(button_id)
+                if not text:
                     return JSONResponse(content={"status": "ignored"}, status_code=200)
+            else:
+                return JSONResponse(content={"status": "ignored"}, status_code=200)
         else:
             return JSONResponse(content={"status": "ignored"}, status_code=200)
 
@@ -750,10 +1133,12 @@ async def webhook(request: Request):
             try:
                 get_token(force_refresh=True)
             except Exception:
-                return JSONResponse(content={"status": "error", "reply": "Token alınamadı"}, status_code=500)
+                await send_whatsapp_message(phone, MSG_SYSTEM_ERROR)
+                return JSONResponse(content={"status": "error"}, status_code=200)
 
         response_text = ""
         conv = get_conversation(phone)
+        skip_outbound = False
 
         # Conversation state: garanti seri numarası bekleniyor
         if conv and conv.get("state") == "AWAIT_SERIAL" and not text.startswith("!"):
@@ -771,49 +1156,119 @@ async def webhook(request: Request):
                     clear_conversation(phone)
                     response_text = handle_status_lookup(phone, order_refs[idx - 1])
                 else:
-                    response_text = (
-                        "Geçersiz seçim. Listeden bir numara seçin veya "
-                        "durum SRV-2026-000017 yazın."
-                    )
-            elif is_service_number(pick) or pick.upper().startswith("DURUM"):
+                    response_text = MSG_UNKNOWN_COMMAND
+            elif is_service_number(pick) or pick.lower().startswith("durum"):
                 clear_conversation(phone)
-                ref, list_only = parse_status_command(pick if pick.lower().startswith("durum") else f"durum {pick}")
+                ref, list_only = parse_status_command(
+                    pick if pick.lower().startswith("durum") else f"durum {pick}"
+                )
                 if list_only or not ref:
                     response_text = handle_customer_status_list(phone)
                 else:
                     response_text = handle_status_lookup(phone, ref)
             else:
-                response_text = (
-                    "Geçersiz seçim. Listeden bir numara seçin veya "
-                    "durum SRV-2026-000017 yazın."
-                )
+                response_text = MSG_UNKNOWN_COMMAND
 
-        # Conversation: teknisyen güncelleme devamı
-        elif conv and conv.get("state") == "AWAIT_TECH_UPDATE" and not text.startswith("!"):
-            parts = text.split()
-            if len(parts) >= 2 and parts[0].isdigit():
-                response_text = handle_tech_update(phone, parts[0], parts[1].upper())
+        # Conversation: teknisyen listeden seçim
+        elif conv and conv.get("state") == "AWAIT_TECH_PICK" and not text.startswith("!"):
+            pick = text.strip()
+            order_refs = conv.get("orders") or []
+            if pick.isdigit() and 1 <= int(pick) <= len(order_refs):
+                clear_conversation(phone)
+                wo, err = find_tech_owned_work_order(phone, order_refs[int(pick) - 1])
+                response_text = err or format_work_order_detail(wo)
+            elif is_service_number(pick) or pick.isdigit():
+                clear_conversation(phone)
+                wo, err = find_tech_owned_work_order(phone, pick)
+                response_text = err or format_work_order_detail(wo)
             else:
-                response_text = "Format: [ID] [DURUM]  örn: 12 WAITING_PARTS"
+                cmd, status, ref = parse_tech_command(pick)
+                if cmd:
+                    clear_conversation(phone)
+                    response_text = handle_tech_command(phone, cmd, status, ref)
+                else:
+                    response_text = MSG_UNKNOWN_COMMAND
 
-        elif text.startswith("!yardim"):
-            role = await get_user_role(phone)
+        # Conversation: teknisyen komutu için servis no bekleniyor
+        elif conv and conv.get("state") == "AWAIT_TECH_CMD_REF" and not text.startswith("!"):
+            pending_cmd = conv.get("command") or "başla"
+            status = TECH_COMMAND_STATUS.get(pending_cmd) or TECH_COMMAND_STATUS.get(
+                str(pending_cmd).lower()
+            )
+            pick = text.strip()
+            order_refs = conv.get("orders") or []
+            ref = None
+            if pick.isdigit() and 1 <= int(pick) <= len(order_refs):
+                ref = order_refs[int(pick) - 1]
+            else:
+                ref = normalize_service_ref(pick)
+            if status and ref:
+                response_text = handle_tech_command(phone, pending_cmd, status, ref)
+            else:
+                response_text = MSG_UNKNOWN_COMMAND
+
+        # Conversation: teknisyen güncelleme devamı (eski format)
+        elif conv and conv.get("state") == "AWAIT_TECH_UPDATE" and not text.startswith("!"):
+            cmd, status, ref = parse_tech_command(text)
+            if cmd:
+                response_text = handle_tech_command(phone, cmd, status, ref)
+            else:
+                parts = text.split()
+                if len(parts) >= 2 and parts[0].isdigit():
+                    mapped = TECH_COMMAND_STATUS.get(parts[1].lower())
+                    if mapped:
+                        response_text = handle_tech_command(phone, parts[1].lower(), mapped, parts[0])
+                    elif parts[1].upper() in STATUS_LABELS_TR:
+                        response_text = handle_tech_update(phone, parts[0], parts[1].upper())
+                    else:
+                        response_text = MSG_UNKNOWN_COMMAND
+                else:
+                    response_text = MSG_UNKNOWN_COMMAND
+
+        elif text.startswith("!yardim") or is_greeting(text):
+            profile = await get_user_profile(phone)
+            role = profile["role"]
             if role == "UNREGISTERED":
                 response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
+            elif text.startswith("!yardim") and role == "TECHNICIAN":
+                response_text = tech_help_message()
+            elif text.startswith("!yardim") and role == "CUSTOMER":
+                response_text = customer_help_message()
             else:
-                body_text, buttons = welcome_menu(role)
-                await send_interactive_buttons(phone, body_text, buttons)
-                response_text = "Menü gönderildi."
+                response_text = await send_menu(phone, role, profile.get("firstName"))
+                if response_text == "Menü gönderildi.":
+                    skip_outbound = True
 
-        elif text.startswith("!isliste"):
+        elif text.startswith("!isliste") or text.lower() in ("işlerim", "islerim", "atanan işlerim"):
             response_text = handle_tech_list(phone)
 
-        elif text.startswith("!guncelle"):
+        elif text.startswith("!islem") or text.startswith("!guncelle"):
             parts = text.split()
             if len(parts) >= 3:
-                response_text = handle_tech_update(phone, parts[1], parts[2].upper())
+                # Eski: !guncelle ID STATUS
+                status_arg = parts[2].upper()
+                mapped = TECH_COMMAND_STATUS.get(parts[2].lower()) or (
+                    status_arg if status_arg in STATUS_LABELS_TR else None
+                )
+                if mapped:
+                    response_text = handle_tech_command(phone, parts[2].lower(), mapped, parts[1])
+                else:
+                    response_text = MSG_UNKNOWN_COMMAND
             else:
-                response_text = handle_tech_update_prompt(phone)
+                response_text = await send_tech_action_menu(phone)
+                if response_text == "Menü gönderildi.":
+                    skip_outbound = True
+
+        elif text.startswith("!basla") or text.startswith("!parca") or text.startswith("!tamamla") or text.startswith("!devam"):
+            cmd, status, ref = parse_tech_command(text.lstrip("!"))
+            # button sends !basla without SRV
+            if not cmd:
+                key = text.lstrip("!").split()[0].lower()
+                aliases = {"basla": "başla", "parca": "parça", "tamamla": "tamamla", "devam": "devam"}
+                cmd = aliases.get(key, key)
+                status = TECH_COMMAND_STATUS.get(cmd)
+                ref = None
+            response_text = handle_tech_command(phone, cmd, status, ref)
 
         elif text.startswith("!garanti"):
             parts = text.split()
@@ -822,10 +1277,10 @@ async def webhook(request: Request):
                 response_text = handle_warranty_query(phone, parts[1])
             else:
                 set_conversation(phone, "AWAIT_SERIAL")
-                response_text = "Lütfen cihaz seri numarasını yazın."
+                response_text = warranty_prompt_message()
 
-        elif text.lower().startswith("!durum") or text.lower().startswith("durum"):
-            ref, list_only = parse_status_command(text)
+        elif text.lower().startswith("!durum") or text.lower().startswith("durum") or text.lower() in ("servislerim", "!servislerim"):
+            ref, list_only = parse_status_command(text if "durum" in text.lower() or text.startswith("!") else "durum")
             clear_conversation(phone)
             if list_only or not ref:
                 response_text = handle_customer_status_list(phone)
@@ -833,21 +1288,31 @@ async def webhook(request: Request):
                 response_text = handle_status_lookup(phone, ref)
 
         else:
-            # Liste dışı: yalnız sayı veya SRV-... → durum sorgusu
-            bare_ref, _ = parse_status_command(text)
-            if bare_ref and (is_service_number(bare_ref) or bare_ref.isdigit()):
-                clear_conversation(phone)
-                response_text = handle_status_lookup(phone, bare_ref)
+            # Teknisyen Türkçe komutları
+            cmd, status, ref = parse_tech_command(text)
+            if cmd:
+                response_text = handle_tech_command(phone, cmd, status, ref)
             else:
-                role = await get_user_role(phone)
-                if role == "UNREGISTERED":
-                    response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
+                bare_ref, _ = parse_status_command(text)
+                if bare_ref and (is_service_number(bare_ref) or bare_ref.isdigit()):
+                    clear_conversation(phone)
+                    profile = await get_user_profile(phone)
+                    if profile["role"] == "TECHNICIAN":
+                        wo, err = find_tech_owned_work_order(phone, bare_ref)
+                        response_text = err or format_work_order_detail(wo)
+                    else:
+                        response_text = handle_status_lookup(phone, bare_ref)
                 else:
-                    body_text, buttons = welcome_menu(role)
-                    await send_interactive_buttons(phone, body_text, buttons)
-                    response_text = "Menü gönderildi."
+                    profile = await get_user_profile(phone)
+                    role = profile["role"]
+                    if role == "UNREGISTERED":
+                        response_text = "Sisteme kayıtlı bir numara değilsiniz. Lütfen önce kaydolun."
+                    else:
+                        response_text = await send_menu(phone, role, profile.get("firstName"))
+                        if response_text == "Menü gönderildi.":
+                            skip_outbound = True
 
-        if response_text:
+        if response_text and not skip_outbound:
             await send_whatsapp_message(phone, response_text)
             await log_bot_interaction(
                 direction="OUTBOUND",
@@ -856,6 +1321,15 @@ async def webhook(request: Request):
                 command=command_summary,
                 status="SENT",
                 messageSummary=(response_text or "")[:120],
+            )
+        elif skip_outbound:
+            await log_bot_interaction(
+                direction="OUTBOUND",
+                phone=phone,
+                messageType="interactive",
+                command=command_summary,
+                status="SENT",
+                messageSummary="menu",
             )
 
         return JSONResponse(content={"status": "received"}, status_code=200)

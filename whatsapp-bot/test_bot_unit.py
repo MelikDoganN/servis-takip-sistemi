@@ -52,10 +52,12 @@ def test_format_warranty_reply_uses_dto_fields():
         },
         "SN-1",
     )
-    assert "Ayşe" in text
     assert "Apple" in text
+    assert "MacBook" in text
     assert "isUnderWarranty" not in text
     assert "Garanti devam ediyor" in text
+    assert "HTTP" not in text
+    assert "Ayşe" not in text  # gereksiz PII yok
 
 
 def test_conversation_ttl():
@@ -99,24 +101,16 @@ def test_send_notification_requires_api_key():
 def test_button_ids_map_to_commands():
     mapping = {
         "btn_islist": "!isliste",
-        "btn_guncelle": "!guncelle",
+        "btn_islem": "!islem",
         "btn_garanti": "!garanti",
         "btn_durum": "!durum",
         "btn_yardim": "!yardim",
+        "btn_basla": "!basla",
+        "btn_parca": "!parca",
+        "btn_tamamla": "!tamamla",
     }
     for button_id, expected in mapping.items():
-        text = None
-        if button_id == "btn_islist":
-            text = "!isliste"
-        elif button_id == "btn_guncelle":
-            text = "!guncelle"
-        elif button_id == "btn_garanti":
-            text = "!garanti"
-        elif button_id == "btn_durum":
-            text = "!durum"
-        elif button_id == "btn_yardim":
-            text = "!yardim"
-        assert text == expected
+        assert mapping[button_id] == expected
 
 
 def test_parse_status_command_variants():
@@ -138,6 +132,22 @@ def test_parse_status_command_variants():
         assert list_only is expected_list, text
 
 
+def test_parse_tech_commands():
+    cases = [
+        ("başla SRV-2026-000021", "başla", "IN_PROGRESS", "SRV-2026-000021"),
+        ("parça SRV-2026-000021", "parça", "WAITING_PARTS", "SRV-2026-000021"),
+        ("parca 12", "parca", "WAITING_PARTS", "12"),
+        ("devam SRV-2026-000021", "devam", "IN_PROGRESS", "SRV-2026-000021"),
+        ("tamamla SRV-2026-000021", "tamamla", "RESOLVED", "SRV-2026-000021"),
+        ("başla", "başla", "IN_PROGRESS", None),
+    ]
+    for text, cmd, status, ref in cases:
+        c, s, r = app_module.parse_tech_command(text)
+        assert c == cmd, text
+        assert s == status, text
+        assert r == ref, text
+
+
 def test_format_work_order_detail_turkish_and_defaults():
     text = app_module.format_work_order_detail(
         {
@@ -145,20 +155,136 @@ def test_format_work_order_detail_turkish_and_defaults():
             "status": "ASSIGNED",
             "description": ".",
             "device": {
+                "serialNumber": "SN-9",
                 "model": {"brand": {"name": "Lenovo"}, "name": "ThinkPad"},
             },
             "technician": {"user": {"fullName": "Miraç"}},
+            "estimatedCompletionAt": None,
         }
     )
     assert "SRV-2026-000017" in text
     assert "Teknisyen Atandı" in text
     assert "Lenovo ThinkPad" in text
-    assert "Belirtilmemiş" in text
+    assert "Belirtilmedi" in text
     assert "Miraç" in text
     assert "HTTP" not in text
+    assert "ASSIGNED" not in text
+
+
+def test_format_work_order_detail_ready_and_cancelled():
+    ready = app_module.format_work_order_detail(
+        {"serviceNumber": "SRV-1", "status": "READY_FOR_DELIVERY", "description": "x"}
+    )
+    assert "teslim alınmaya hazır" in ready.lower() or "Teslime Hazır" in ready
+    cancelled = app_module.format_work_order_detail(
+        {
+            "serviceNumber": "SRV-2",
+            "status": "CANCELLED",
+            "cancellationReason": None,
+            "description": "x",
+        }
+    )
+    assert "iptal" in cancelled.lower()
+    assert "Belirtilmedi" in cancelled
 
 
 def test_friendly_not_found_has_no_http():
     msg = app_module.friendly_not_found_message()
     assert "HTTP" not in msg
-    assert "SRV-" in msg
+    assert "🔎" in msg
+
+
+def test_customer_and_tech_lists():
+    orders = [
+        {
+            "serviceNumber": "SRV-2026-000021",
+            "status": "ASSIGNED",
+            "device": {"model": {"brand": {"name": "Samsung"}, "name": "Galaxy A54"}},
+        },
+        {
+            "serviceNumber": "SRV-2026-000019",
+            "status": "WAITING_PARTS",
+            "device": {"model": {"brand": {"name": "Lenovo"}, "name": "ThinkPad"}},
+        },
+    ]
+    customer = app_module.format_customer_service_list(orders)
+    assert "Açık Servis Kayıtlarınız" in customer
+    assert "SRV-2026-000021" in customer
+    assert "Teknisyen Atandı" in customer
+    assert "Parça Bekliyor" in customer
+    assert "HTTP" not in customer
+    assert "WAITING_PARTS" not in customer
+
+    empty = app_module.format_customer_service_list([])
+    assert "bulunmuyor" in empty.lower()
+
+    tech = app_module.format_tech_service_list(orders)
+    assert "Aktif İş Emirleriniz" in tech
+    assert "SRV-2026-000021" in tech
+
+
+def test_welcome_menu_customer_and_technician():
+    body, buttons, fallback = app_module.welcome_menu("CUSTOMER", "Ayşe")
+    assert "Ayşe" in body
+    assert "Servis Takip Asistanına" in body
+    assert len(buttons) == 3
+    assert "Servislerim" in fallback
+
+    body_t, buttons_t, fallback_t = app_module.welcome_menu("TECHNICIAN", "Ali")
+    assert "Ali" in body_t
+    assert "Teknisyen İşlem Paneline" in body_t
+    assert len(buttons_t) == 3
+    assert "başla" in fallback_t.lower() or "Atanan" in fallback_t
+
+
+def test_welcome_menu_without_name():
+    body, _, _ = app_module.welcome_menu("CUSTOMER", None)
+    assert "Merhaba" in body
+    assert "{customerFirstName}" not in body
+
+
+def test_tech_help_and_update_success():
+    help_msg = app_module.tech_help_message()
+    assert "başla SRV-" in help_msg
+    assert "parça SRV-" in help_msg
+    assert "tamamla SRV-" in help_msg
+    assert "HTTP" not in help_msg
+
+    ok = app_module.format_tech_update_success("SRV-2026-000021", "IN_PROGRESS")
+    assert "güncellendi" in ok.lower()
+    assert "SRV-2026-000021" in ok
+    assert "İşlemde" in ok
+    assert "IN_PROGRESS" not in ok
+
+
+def test_error_messages_have_no_http():
+    for msg in (
+        app_module.MSG_NOT_FOUND,
+        app_module.MSG_UNKNOWN_COMMAND,
+        app_module.MSG_SYSTEM_ERROR,
+        app_module.MSG_FORBIDDEN,
+        app_module.MSG_INVALID_TRANSITION,
+        app_module.warranty_prompt_message(),
+    ):
+        assert "HTTP" not in msg
+        assert "Exception" not in msg
+
+
+def test_is_greeting():
+    assert app_module.is_greeting("Merhaba")
+    assert app_module.is_greeting("selam")
+    assert app_module.is_greeting("Menü")
+    assert app_module.is_greeting("yardım")
+    assert not app_module.is_greeting("başla SRV-1")
+
+
+def test_mask_phone_no_full_number():
+    masked = app_module.mask_phone("905551112233")
+    assert "905551112233" not in masked
+    assert "******" in masked
+
+
+def test_status_labels_match_spec():
+    assert app_module.work_order_status_label("RESOLVED") == "Teknik İşlem Tamamlandı"
+    assert app_module.work_order_status_label("READY_FOR_DELIVERY") == "Teslime Hazır"
+    assert app_module.work_order_status_label("DELIVERED") == "Teslim Edildi"
