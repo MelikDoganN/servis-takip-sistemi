@@ -73,19 +73,19 @@ public class WhatsAppNotificationClient {
         if (botBaseUrl == null || botBaseUrl.isBlank()) {
             log.warn("WhatsApp bildirimi atlandı: WHATSAPP_BOT_URL tanımlı değil");
             logOutbound(request, phone, "SKIPPED", "BOT_URL_MISSING");
-            workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "SKIPPED", null);
+            recordCustomerTracker(request, "SKIPPED", null);
             return;
         }
         if (botApiKey == null || botApiKey.isBlank()) {
             log.warn("WhatsApp bildirimi atlandı: WHATSAPP_BOT_API_KEY tanımlı değil");
             logOutbound(request, phone, "SKIPPED", "BOT_API_KEY_MISSING");
-            workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "SKIPPED", null);
+            recordCustomerTracker(request, "SKIPPED", null);
             return;
         }
         if (phone == null || phone.isBlank() || request.getMessage() == null || request.getMessage().isBlank()) {
             log.warn("WhatsApp bildirimi atlandı: telefon veya mesaj boş");
             logOutbound(request, phone, "SKIPPED", "PHONE_OR_MESSAGE_EMPTY");
-            workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "SKIPPED", null);
+            recordCustomerTracker(request, "SKIPPED", null);
             return;
         }
 
@@ -101,13 +101,12 @@ public class WhatsAppNotificationClient {
         SendResult result = doHttpSend(phone, request);
         if (result.success) {
             logOutbound(request, phone, "SENT", null);
-            workOrderNotificationTracker.recordResult(
-                    request.getWorkOrderId(), "SENT", result.messageId);
+            recordCustomerTracker(request, "SENT", result.messageId);
             return;
         }
 
         logOutbound(request, phone, "FAILED", result.error);
-        workOrderNotificationTracker.recordResult(request.getWorkOrderId(), "FAILED", null);
+        recordCustomerTracker(request, "FAILED", null);
         if (request.getWorkOrderId() != null && request.getEventType() != null) {
             boolean queued = whatsAppOutboxService.enqueueIfAbsent(request, phone, result.error);
             if (queued) {
@@ -129,12 +128,26 @@ public class WhatsAppNotificationClient {
         SendResult result = doHttpSend(phone, request);
         if (result.success) {
             logOutbound(request, phone, "SENT", null);
-            workOrderNotificationTracker.recordResult(outbox.getWorkOrderId(), "SENT", result.messageId);
+            recordCustomerTracker(request, "SENT", result.messageId);
             return true;
         }
         logOutbound(request, phone, "FAILED", result.error);
-        workOrderNotificationTracker.recordResult(outbox.getWorkOrderId(), "FAILED", null);
+        recordCustomerTracker(request, "FAILED", null);
         return false;
+    }
+
+    /**
+     * Müşteri tracker alanları yalnız müşteriye giden event'lerde güncellenir.
+     * Teknisyen bildirimi (TECHNICIAN_WORK_ORDER_ASSIGNED) bu alanlara dokunmaz.
+     */
+    private void recordCustomerTracker(WhatsAppNotificationRequest request, String status, String messageId) {
+        if (request == null || request.getWorkOrderId() == null) {
+            return;
+        }
+        if (!WhatsAppNotificationRequest.isCustomerFacingEvent(request.getEventType())) {
+            return;
+        }
+        workOrderNotificationTracker.recordResult(request.getWorkOrderId(), status, messageId);
     }
 
     public boolean isBotUrlConfigured() {

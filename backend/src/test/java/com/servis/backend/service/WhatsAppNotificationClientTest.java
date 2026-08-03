@@ -1,6 +1,7 @@
 package com.servis.backend.service;
 
 import com.servis.backend.dto.WhatsAppNotificationRequest;
+import com.servis.backend.entity.WhatsAppOutbox;
 import com.servis.backend.repository.NotificationDedupRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -161,5 +163,104 @@ class WhatsAppNotificationClientTest {
         assertTrue(masked.startsWith("905"));
         assertTrue(masked.endsWith("233"));
         assertTrue(masked.contains("******"));
+        assertFalse(masked.contains("905551112233"));
+        assertFalse(masked.contains("555111"));
+    }
+
+    @Test
+    void sendNotification_TechnicianEvent_DoesNotUpdateCustomerTracker() {
+        ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com");
+        ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("{\"messageId\":\"wamid.abc\"}"));
+        when(notificationDedupRepository.existsByWorkOrderIdAndEventTypeAndEventKey(any(), any(), any()))
+                .thenReturn(false);
+        when(notificationDedupRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+        req.setPhone("905559998877");
+        req.setMessage("📋 Yeni İş Emri Atandı\nServis No: SRV-2026-000001");
+        req.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_WORK_ORDER_ASSIGNED);
+        req.setWorkOrderId(42L);
+        req.setTechnicianId(7L);
+        req.setEventKey("technician:7");
+
+        client.sendNotification(req);
+
+        verify(workOrderNotificationTracker, never()).recordResult(any(), any(), any());
+    }
+
+    @Test
+    void sendNotification_CustomerEvent_UpdatesCustomerTracker() {
+        ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com");
+        ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("{\"id\":\"wamid.xyz\"}"));
+        when(notificationDedupRepository.existsByWorkOrderIdAndEventTypeAndEventKey(any(), any(), any()))
+                .thenReturn(false);
+        when(notificationDedupRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+        req.setPhone("905551112233");
+        req.setMessage("Atandı");
+        req.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_ASSIGNED);
+        req.setWorkOrderId(42L);
+        req.setEventKey("tech:7");
+
+        client.sendNotification(req);
+
+        verify(workOrderNotificationTracker).recordResult(eq(42L), eq("SENT"), eq("wamid.xyz"));
+    }
+
+    @Test
+    void sendNotification_TechnicianEvent_BotDown_EnqueuesPending_NoCustomerTracker() {
+        ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com");
+        ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
+        when(notificationDedupRepository.existsByWorkOrderIdAndEventTypeAndEventKey(any(), any(), any()))
+                .thenReturn(false);
+        when(notificationDedupRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenThrow(new ResourceAccessException("Read timed out"));
+        when(whatsAppOutboxService.enqueueIfAbsent(any(), anyString(), anyString())).thenReturn(true);
+
+        WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+        req.setPhone("905559998877");
+        req.setMessage("Servis No: SRV-2026-000099");
+        req.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_WORK_ORDER_ASSIGNED);
+        req.setWorkOrderId(99L);
+        req.setTechnicianId(7L);
+        req.setEventKey("technician:7");
+
+        assertDoesNotThrow(() -> client.sendNotification(req));
+        verify(whatsAppOutboxService).enqueueIfAbsent(any(), eq("905559998877"), anyString());
+        verify(workOrderNotificationTracker, never()).recordResult(any(), any(), any());
+    }
+
+    @Test
+    void retrySend_TechnicianEvent_Success_DoesNotTouchCustomerTracker() {
+        ReflectionTestUtils.setField(client, "botBaseUrl", "https://bot.example.com");
+        ReflectionTestUtils.setField(client, "botApiKey", "secret-key");
+        when(restTemplate.postForEntity(anyString(), any(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok("{\"messageId\":\"wamid.retry\"}"));
+
+        WhatsAppOutbox outbox = new WhatsAppOutbox();
+        outbox.setWorkOrderId(55L);
+        outbox.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_WORK_ORDER_ASSIGNED);
+        outbox.setEventKey("technician:7");
+        outbox.setRecipientPhone("905559998877");
+        outbox.setPayload("{\"phone\":\"905559998877\",\"message\":\"Servis No: SRV-1\",\"eventType\":\"TECHNICIAN_WORK_ORDER_ASSIGNED\",\"workOrderId\":55}");
+
+        when(whatsAppOutboxService.fromOutbox(outbox)).thenAnswer(inv -> {
+            WhatsAppNotificationRequest r = new WhatsAppNotificationRequest();
+            r.setPhone("905559998877");
+            r.setMessage("Servis No: SRV-1");
+            r.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_WORK_ORDER_ASSIGNED);
+            r.setWorkOrderId(55L);
+            r.setEventKey("technician:7");
+            return r;
+        });
+
+        assertTrue(client.retrySend(outbox));
+        verify(workOrderNotificationTracker, never()).recordResult(any(), any(), any());
     }
 }

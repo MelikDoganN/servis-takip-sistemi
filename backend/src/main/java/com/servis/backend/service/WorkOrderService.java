@@ -21,9 +21,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -326,6 +329,10 @@ public class WorkOrderService {
                     : "teknisyen";
             notificationService.notifyTechnicianAssigned(saved, techName);
             notifyTechnicianAssigned(saved, technician);
+            // Atama DB'ye commit olduktan sonra teknisyene WhatsApp; rollback'te mesaj gitmez
+            Long savedWoId = saved.getId();
+            Long techId = technician.getId();
+            runAfterCommit(() -> notifyTechnicianWorkOrderAssigned(savedWoId, techId));
         }
 
         return saved;
@@ -414,6 +421,154 @@ public class WorkOrderService {
         } catch (Exception e) {
             log.warn("WhatsApp assign bildirimi başarısız (wo={}): {}", saved.getId(), e.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * Teknisyene iş emri atama bildirimi. Müşteri TECHNICIAN_ASSIGNED eventinden ayrıdır.
+     * Atama başarısını bozmaz; telefon yoksa sadece warning loglar.
+     */
+    void notifyTechnicianWorkOrderAssigned(Long workOrderId, Long technicianId) {
+        try {
+            WorkOrder saved = workOrderRepository.findById(workOrderId).orElse(null);
+            if (saved == null) {
+                log.warn("Teknisyen WhatsApp bildirimi atlandı: iş emri yok (wo={})", workOrderId);
+                return;
+            }
+            Technician technician = technicianRepository.findById(technicianId).orElse(null);
+            if (technician == null) {
+                log.warn("Teknisyen WhatsApp bildirimi atlandı: teknisyen yok (tech={})", technicianId);
+                return;
+            }
+            String phone = resolveTechnicianNotifyPhone(technician);
+            if (phone == null) {
+                log.warn("Teknisyen WhatsApp bildirimi atlandı: teknisyen telefonu yok/geçersiz (wo={}, tech={})",
+                        workOrderId, technicianId);
+                return;
+            }
+            String techName = technician.getUser() != null && technician.getUser().getFullName() != null
+                    ? technician.getUser().getFullName()
+                    : "teknisyen";
+            WhatsAppNotificationRequest req = new WhatsAppNotificationRequest();
+            req.setPhone(phone);
+            req.setMessage(buildTechnicianWorkOrderAssignedMessage(saved));
+            req.setEventType(WhatsAppNotificationRequest.EVENT_TECHNICIAN_WORK_ORDER_ASSIGNED);
+            req.setWorkOrderId(saved.getId());
+            req.setTechnicianId(technician.getId());
+            req.setTechnicianName(techName);
+            req.setEventKey("technician:" + technician.getId());
+            whatsAppNotificationClient.sendNotification(req);
+        } catch (Exception e) {
+            log.warn("Teknisyen WhatsApp bildirimi başarısız (wo={}): {}", workOrderId, e.getClass().getSimpleName());
+        }
+    }
+
+    /** Teknisyen WhatsApp numarası; müşteri telefonu asla kullanılmaz. */
+    static String resolveTechnicianNotifyPhone(Technician technician) {
+        if (technician == null || technician.getWhatsappNumber() == null
+                || technician.getWhatsappNumber().isBlank()) {
+            return null;
+        }
+        return PhoneNormalizer.normalize(technician.getWhatsappNumber());
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        action.run();
+                    } catch (Exception e) {
+                        log.warn("After-commit WhatsApp bildirimi başarısız: {}", e.getClass().getSimpleName());
+                    }
+                }
+            });
+        } else {
+            // Unit test / TX dışı: hemen çalıştır
+            try {
+                action.run();
+            } catch (Exception e) {
+                log.warn("WhatsApp bildirimi başarısız: {}", e.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private static final DateTimeFormatter ETA_FORMAT =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+
+    static String buildTechnicianWorkOrderAssignedMessage(WorkOrder workOrder) {
+        String serviceNo = displayServiceNumber(workOrder);
+        String customerName = "Belirtilmedi";
+        if (workOrder.getCustomer() != null && workOrder.getCustomer().getFullName() != null
+                && !workOrder.getCustomer().getFullName().isBlank()) {
+            customerName = workOrder.getCustomer().getFullName().trim();
+        }
+        String deviceLabel = resolveDeviceBrandModel(workOrder.getDevice());
+        String serial = "Belirtilmedi";
+        if (workOrder.getDevice() != null && workOrder.getDevice().getSerialNumber() != null
+                && !workOrder.getDevice().getSerialNumber().isBlank()) {
+            serial = workOrder.getDevice().getSerialNumber().trim();
+        }
+        String description = normalizeDescription(workOrder.getDescription());
+        String priority = priorityLabelTr(workOrder.getPriority());
+        String eta = "Belirtilmedi";
+        if (workOrder.getEstimatedCompletionAt() != null) {
+            eta = workOrder.getEstimatedCompletionAt().format(ETA_FORMAT);
+        }
+
+        return "📋 Yeni İş Emri Atandı\n\n"
+                + "Servis No: " + serviceNo + "\n"
+                + "Müşteri: " + customerName + "\n"
+                + "Cihaz: " + deviceLabel + "\n"
+                + "Seri No: " + serial + "\n"
+                + "Arıza: " + description + "\n"
+                + "Öncelik: " + priority + "\n"
+                + "Tahmini Tamamlanma: " + eta + "\n\n"
+                + "Panelden iş emri detayını kontrol edebilirsiniz.";
+    }
+
+    static String resolveDeviceBrandModel(Device device) {
+        if (device == null || device.getModel() == null) {
+            return "Belirtilmedi";
+        }
+        String brand = device.getModel().getBrand() != null
+                ? device.getModel().getBrand().getName()
+                : null;
+        String model = device.getModel().getName();
+        StringBuilder sb = new StringBuilder();
+        if (brand != null && !brand.isBlank()) {
+            sb.append(brand.trim());
+        }
+        if (model != null && !model.isBlank()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(model.trim());
+        }
+        return sb.length() == 0 ? "Belirtilmedi" : sb.toString();
+    }
+
+    static String normalizeDescription(String description) {
+        if (description == null) {
+            return "Belirtilmedi";
+        }
+        String trimmed = description.trim();
+        if (trimmed.isEmpty() || ".".equals(trimmed)) {
+            return "Belirtilmedi";
+        }
+        return trimmed;
+    }
+
+    static String priorityLabelTr(String priority) {
+        if (priority == null || priority.isBlank()) {
+            return "Belirtilmedi";
+        }
+        return switch (priority.trim().toUpperCase(Locale.ROOT)) {
+            case "LOW" -> "Düşük";
+            case "MEDIUM" -> "Orta";
+            case "HIGH" -> "Yüksek";
+            default -> priority.trim();
+        };
     }
 
     private void notifyStatusChanged(WorkOrder updated, String oldStatus, String newStatus) {
