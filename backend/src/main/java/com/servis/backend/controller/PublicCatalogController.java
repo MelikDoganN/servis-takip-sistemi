@@ -2,7 +2,10 @@ package com.servis.backend.controller;
 
 import com.servis.backend.dto.ProductCategoryDto;
 import com.servis.backend.dto.ProductDto;
+import com.servis.backend.dto.PublicServiceStatusDto;
+import com.servis.backend.dto.PublicWarrantyDto;
 import com.servis.backend.service.ProductCatalogService;
+import com.servis.backend.service.PublicLookupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
@@ -10,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * Kimlik doğrulamasız public katalog — yalnız active ürünler, public-safe alanlar.
+ * Kimlik doğrulamasız public API — yalnız public-safe alanlar.
  */
 @RestController
 @RequestMapping("/api/public")
@@ -18,6 +21,9 @@ public class PublicCatalogController {
 
     @Autowired
     private ProductCatalogService productCatalogService;
+
+    @Autowired
+    private PublicLookupService publicLookupService;
 
     @GetMapping("/products")
     public Page<ProductDto> listProducts(
@@ -42,5 +48,21 @@ public class PublicCatalogController {
     @GetMapping("/categories")
     public List<ProductCategoryDto> categories() {
         return productCatalogService.listPublicCategories();
+    }
+
+    /** Public garanti — müşteri PII dönmez. */
+    @GetMapping("/warranty/{serialNumber}")
+    public PublicWarrantyDto warrantyBySerial(@PathVariable String serialNumber) {
+        return publicLookupService.lookupWarranty(serialNumber);
+    }
+
+    /**
+     * Public servis durumu — phone zorunlu; ownership yoksa güvenli 404.
+     */
+    @GetMapping("/service/{serviceNumber}")
+    public PublicServiceStatusDto serviceByNumber(
+            @PathVariable String serviceNumber,
+            @RequestParam String phone) {
+        return publicLookupService.lookupService(serviceNumber, phone);
     }
 }
