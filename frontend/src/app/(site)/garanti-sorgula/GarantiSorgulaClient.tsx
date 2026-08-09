@@ -1,26 +1,56 @@
 "use client";
 
 import { useState } from "react";
+import { Shield } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DetailList } from "@/components/ui/DetailList";
 import { Reveal } from "@/components/site/Reveal";
-import { formatDate } from "@/lib/utils";
 import {
-  WarrantyDeviceInfo,
-  warrantyStatusLabel,
-} from "@/types/warranty";
+  PublicLookupError,
+  publicLookupService,
+} from "@/services/publicLookupService";
+import {
+  PublicWarranty,
+  publicDisplayValue,
+  publicFormatDate,
+  publicWarrantyStatusLabel,
+} from "@/types/publicLookup";
 
-function apiBase(): string {
-  if (typeof window !== "undefined") return "";
-  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080").replace(/\/$/, "");
+function warrantyErrorMessage(err: unknown): string {
+  const status = err instanceof PublicLookupError ? err.status : undefined;
+  if (status === 404) {
+    return "Bu seri numarasına ait garanti kaydı bulunamadı.";
+  }
+  if (status === 429) {
+    return "Çok fazla sorgu yaptınız. Lütfen kısa bir süre sonra tekrar deneyin.";
+  }
+  if (status === 400) {
+    return "Seri numarası giriniz.";
+  }
+  return "Garanti bilgisi şu anda alınamıyor.";
+}
+
+function statusBadgeVariant(
+  status?: string | null
+): "success" | "danger" | "neutral" | "warning" {
+  switch ((status || "").toUpperCase()) {
+    case "AKTIF":
+      return "success";
+    case "SURESI_DOLMUS":
+      return "danger";
+    case "TARIH_EKSIK":
+      return "warning";
+    default:
+      return "neutral";
+  }
 }
 
 export default function GarantiSorgulaClient() {
   const [serial, setSerial] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<WarrantyDeviceInfo | null>(null);
+  const [result, setResult] = useState<PublicWarranty | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,34 +64,19 @@ export default function GarantiSorgulaClient() {
     setError("");
     setResult(null);
     try {
-      const response = await fetch(
-        `${apiBase()}/api/warranty/device/${encodeURIComponent(value)}`,
-        { headers: { Accept: "application/json" }, cache: "no-store" }
-      );
-      if (response.status === 404) {
-        setError("Bu seri numarası ile kayıtlı cihaz bulunamadı.");
-        return;
-      }
-      if (response.status === 401 || response.status === 403) {
-        setError(
-          "Garanti sorgusu şu an yalnızca yetkili kanallar üzerinden yapılabiliyor. Lütfen WhatsApp veya servis noktamız ile iletişime geçin."
-        );
-        return;
-      }
-      if (!response.ok) {
-        setError("Garanti bilgisi alınamadı. Lütfen daha sonra tekrar deneyin.");
-        return;
-      }
-      const data = (await response.json()) as WarrantyDeviceInfo;
+      const data = await publicLookupService.getPublicWarranty(value);
       setResult(data);
-    } catch {
-      setError("Sunucuya bağlanılamadı. Lütfen tekrar deneyin.");
+    } catch (err) {
+      setError(warrantyErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   const status = (result?.warrantyStatus || "").toUpperCase();
+  const deviceLabel = [result?.brand, result?.model]
+    .filter((p) => p && String(p).trim())
+    .join(" ");
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8">
@@ -89,13 +104,17 @@ export default function GarantiSorgulaClient() {
               onChange={(e) => setSerial(e.target.value)}
               placeholder="Örn. SN-XXXXXXXX"
               autoComplete="off"
+              disabled={loading}
             />
           </div>
           <Button type="submit" loading={loading} disabled={loading} className="w-full sm:w-auto">
             Sorgula
           </Button>
           {error && (
-            <p className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p
+              role="alert"
+              className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+            >
               {error}
             </p>
           )}
@@ -106,39 +125,35 @@ export default function GarantiSorgulaClient() {
         <Reveal delayMs={40}>
           <div className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-navy">Sorgu Sonucu</h2>
-              <Badge
-                variant={
-                  status === "AKTIF"
-                    ? "success"
-                    : status === "SURESI_DOLMUS"
-                      ? "danger"
-                      : "neutral"
-                }
-              >
-                {warrantyStatusLabel(result.warrantyStatus)}
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-strong">
+                <Shield className="h-5 w-5" aria-hidden />
+              </span>
+              <h2 className="text-lg font-semibold text-navy">Garanti Bilgisi</h2>
+              <Badge variant={statusBadgeVariant(result.warrantyStatus)}>
+                {publicWarrantyStatusLabel(result.warrantyStatus)}
               </Badge>
             </div>
             <DetailList
               items={[
                 {
                   label: "Cihaz",
-                  value: result.deviceName || result.model || "—",
-                },
-                { label: "Marka", value: result.brand || "—" },
-                { label: "Model", value: result.model || "—" },
-                { label: "Seri No", value: result.serialNumber || serial.trim() },
-                {
-                  label: "Garanti Başlangıç",
-                  value: formatDate(result.warrantyStart),
+                  value: publicDisplayValue(deviceLabel || null),
                 },
                 {
-                  label: "Garanti Bitiş",
-                  value: formatDate(result.warrantyEnd),
+                  label: "Seri No",
+                  value: publicDisplayValue(result.serialNumber || serial.trim()),
+                },
+                {
+                  label: "Garanti Başlangıcı",
+                  value: publicFormatDate(result.warrantyStart),
+                },
+                {
+                  label: "Garanti Bitişi",
+                  value: publicFormatDate(result.warrantyEnd),
                 },
                 {
                   label: "Durum",
-                  value: warrantyStatusLabel(result.warrantyStatus),
+                  value: publicWarrantyStatusLabel(result.warrantyStatus),
                 },
               ]}
             />
