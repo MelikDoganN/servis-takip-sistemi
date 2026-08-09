@@ -4,6 +4,10 @@ import com.servis.backend.dto.WhatsAppNotificationRequest;
 import com.servis.backend.dto.WorkOrderLifecycleUpdate;
 import com.servis.backend.dto.WorkOrderTimelineEventDto;
 import com.servis.backend.entity.*;
+import com.servis.backend.audit.AuditActions;
+import com.servis.backend.audit.AuditEntityTypes;
+import com.servis.backend.audit.AuditEvent;
+import com.servis.backend.audit.AuditSources;
 import com.servis.backend.repository.CustomerRepository;
 import com.servis.backend.repository.DeviceRepository;
 import com.servis.backend.repository.RegionRepository;
@@ -30,6 +34,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,6 +65,9 @@ public class WorkOrderService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public Page<WorkOrder> getAllWorkOrders(Pageable pageable) {
         return workOrderRepository.findAll(pageable);
@@ -169,6 +177,19 @@ public class WorkOrderService {
         notificationService.notifyWorkOrderCreated(saved);
         notifyWorkOrderCreated(saved);
 
+        String svcNo = displayServiceNumber(saved);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.WORK_ORDER_CREATED)
+                .actor(saved.getCreatedBy() != null ? saved.getCreatedBy() : auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.WORK_ORDER, saved.getId(), svcNo)
+                .description(svcNo + " numaralı iş emri oluşturuldu.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("workOrderId", saved.getId())
+                .meta("serviceNumber", svcNo)
+                .meta("customerId", customer.getId())
+                .meta("deviceId", device.getId())
+                .meta("status", WorkOrderStatus.OPEN.name()));
+
         return saved;
     }
 
@@ -248,6 +269,7 @@ public class WorkOrderService {
         saveHistory(updated, changedBy, oldStatus, newStatus, historyDesc, channel);
         notificationService.notifyStatusChanged(updated, newStatus);
         notifyStatusChanged(updated, oldStatus, newStatus);
+        auditStatusChange(updated, changedBy, oldStatus, newStatus, channel, technicianWhatsapp, lifecycle);
         return updated;
     }
 
@@ -334,6 +356,24 @@ public class WorkOrderService {
             Long techId = technician.getId();
             runAfterCommit(() -> notifyTechnicianWorkOrderAssigned(savedWoId, techId));
         }
+
+        String svcNo = displayServiceNumber(saved);
+        String techName = technician.getUser() != null && technician.getUser().getFullName() != null
+                ? technician.getUser().getFullName()
+                : "teknisyen";
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.TECHNICIAN_ASSIGNED)
+                .actor(changedBy != null ? changedBy : auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.WORK_ORDER, saved.getId(), svcNo)
+                .description(svcNo + " iş emrine " + techName + " atandı.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("workOrderId", saved.getId())
+                .meta("serviceNumber", svcNo)
+                .meta("technicianId", technician.getId())
+                .meta("technicianName", techName)
+                .meta("previousTechnicianId", previousTechId)
+                .meta("oldStatus", oldStatus)
+                .meta("newStatus", WorkOrderStatus.ASSIGNED.name()));
 
         return saved;
     }
@@ -626,6 +666,94 @@ public class WorkOrderService {
             case "CANCELLED" -> "İptal Edildi";
             default -> status;
         };
+    }
+
+    private void auditStatusChange(WorkOrder workOrder, User changedBy, String oldStatus, String newStatus,
+                                   String channel, String technicianWhatsapp,
+                                   WorkOrderLifecycleUpdate lifecycle) {
+        String svcNo = displayServiceNumber(workOrder);
+        boolean cancelled = "CANCELLED".equalsIgnoreCase(newStatus);
+        String action = cancelled ? AuditActions.WORK_ORDER_CANCELLED : AuditActions.WORK_ORDER_STATUS_CHANGED;
+        String source = resolveAuditSource(channel);
+        User actor = changedBy != null ? changedBy : auditLogService.currentUserOrNull();
+        Long actorUserId = null;
+        String actorName = null;
+        String actorEmail = null;
+        String actorRole = null;
+        if (actor != null) {
+            actorUserId = actor.getId();
+            actorName = actor.getFullName();
+            actorEmail = actor.getEmail();
+            if (actor.getRole() != null) {
+                actorRole = actor.getRole().getName();
+            }
+        } else if (AuditSources.WHATSAPP.equals(source) && technicianWhatsapp != null) {
+            Optional<User> waUser = findTechnicianUserByWhatsapp(technicianWhatsapp);
+            if (waUser.isPresent()) {
+                User u = waUser.get();
+                actorUserId = u.getId();
+                actorName = u.getFullName();
+                actorEmail = u.getEmail();
+                actorRole = u.getRole() != null ? u.getRole().getName() : "TECHNICIAN";
+            }
+        }
+
+        String desc;
+        if (cancelled) {
+            desc = svcNo + " iş emri iptal edildi.";
+            if (lifecycle != null && lifecycle.getCancellationReason() != null
+                    && !lifecycle.getCancellationReason().isBlank()) {
+                desc = svcNo + " iş emri iptal edildi (" + lifecycle.getCancellationReason().trim() + ").";
+            }
+        } else {
+            desc = svcNo + " durumu " + statusLabelTr(oldStatus) + " → " + statusLabelTr(newStatus)
+                    + " olarak değiştirildi.";
+        }
+
+        AuditEvent event = AuditEvent.of(action)
+                .actor(actorUserId, actorName, actorEmail, actorRole)
+                .entity(AuditEntityTypes.WORK_ORDER, workOrder.getId(), svcNo)
+                .description(desc)
+                .source(source)
+                .success(true)
+                .meta("workOrderId", workOrder.getId())
+                .meta("serviceNumber", svcNo)
+                .meta("oldStatus", oldStatus)
+                .meta("newStatus", newStatus)
+                .meta("oldStatusLabel", statusLabelTr(oldStatus))
+                .meta("newStatusLabel", statusLabelTr(newStatus))
+                .meta("channel", channel);
+        if (lifecycle != null && lifecycle.getCancellationReason() != null) {
+            event.meta("cancellationReason", lifecycle.getCancellationReason());
+        }
+        auditLogService.safeRecord(event);
+    }
+
+    private static String resolveAuditSource(String channel) {
+        if (channel == null || channel.isBlank()) {
+            return AuditSources.WEB;
+        }
+        String c = channel.trim().toUpperCase(Locale.ROOT);
+        if ("WHATSAPP".equals(c)) {
+            return AuditSources.WHATSAPP;
+        }
+        if ("SYSTEM".equals(c)) {
+            return AuditSources.SYSTEM;
+        }
+        return AuditSources.WEB;
+    }
+
+    private Optional<User> findTechnicianUserByWhatsapp(String whatsapp) {
+        if (whatsapp == null || whatsapp.isBlank()) {
+            return Optional.empty();
+        }
+        for (String variant : PhoneNormalizer.searchVariants(whatsapp)) {
+            Optional<Technician> found = technicianRepository.findByWhatsappNumber(variant);
+            if (found.isPresent() && found.get().getUser() != null) {
+                return Optional.of(found.get().getUser());
+            }
+        }
+        return Optional.empty();
     }
 
     /** Geriye uyumluluk: yalnız status ile çağrı (testler). */

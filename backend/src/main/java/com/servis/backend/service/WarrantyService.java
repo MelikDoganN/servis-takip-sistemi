@@ -1,5 +1,9 @@
 package com.servis.backend.service;
 
+import com.servis.backend.audit.AuditActions;
+import com.servis.backend.audit.AuditEntityTypes;
+import com.servis.backend.audit.AuditEvent;
+import com.servis.backend.audit.AuditSources;
 import com.servis.backend.dto.WarrantyDeviceInfoDto;
 import com.servis.backend.entity.Device;
 import com.servis.backend.entity.WarrantyRecord;
@@ -29,6 +33,9 @@ public class WarrantyService {
 
     @Autowired
     private WorkOrderRepository workOrderRepository;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     /**
      * G = T_başlangıç + F_süre
@@ -85,7 +92,9 @@ public class WarrantyService {
         record.setEndDate(endDate);
         record.setDescription(months + " ay " + type + " garantisi");
 
-        return warrantyRecordRepository.save(record);
+        WarrantyRecord saved = warrantyRecordRepository.save(record);
+        auditWarrantyCreated(saved, device);
+        return saved;
     }
 
     /**
@@ -116,7 +125,25 @@ public class WarrantyService {
         record.setStartDate(startDate);
         record.setEndDate(startDate.plusMonths(months));
         record.setDescription(months + " ay GENERAL garantisi");
-        warrantyRecordRepository.save(record);
+        WarrantyRecord saved = warrantyRecordRepository.save(record);
+        auditWarrantyCreated(saved, device);
+    }
+
+    private void auditWarrantyCreated(WarrantyRecord saved, Device device) {
+        String serial = device != null && device.getSerialNumber() != null
+                ? device.getSerialNumber() : ("Cihaz#" + (device != null ? device.getId() : "?"));
+        String type = saved.getWarrantyType() != null ? saved.getWarrantyType() : "GARANTI";
+        String display = serial + " / " + type;
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.WARRANTY_CREATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.WARRANTY, saved.getId(), display)
+                .description(serial + " için " + type + " garantisi oluşturuldu.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("warrantyId", saved.getId())
+                .meta("deviceId", device != null ? device.getId() : null)
+                .meta("warrantyType", type)
+                .meta("serialNumber", device != null ? device.getSerialNumber() : null));
     }
 
     @Transactional(readOnly = true)

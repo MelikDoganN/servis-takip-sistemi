@@ -48,6 +48,9 @@ class WorkOrderLifecycleTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private WorkOrderService workOrderService;
 

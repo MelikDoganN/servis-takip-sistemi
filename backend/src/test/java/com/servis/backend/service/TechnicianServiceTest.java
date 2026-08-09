@@ -41,6 +41,9 @@ class TechnicianServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private TechnicianService technicianService;
 

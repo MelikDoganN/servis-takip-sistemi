@@ -31,6 +31,9 @@ class WarrantyServiceTest {
     @Mock
     private WorkOrderRepository workOrderRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private WarrantyService warrantyService;
 

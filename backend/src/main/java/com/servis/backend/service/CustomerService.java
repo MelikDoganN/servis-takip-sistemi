@@ -1,5 +1,9 @@
 package com.servis.backend.service;
 
+import com.servis.backend.audit.AuditActions;
+import com.servis.backend.audit.AuditEntityTypes;
+import com.servis.backend.audit.AuditEvent;
+import com.servis.backend.audit.AuditSources;
 import com.servis.backend.dto.CreateCustomerRequest;
 import com.servis.backend.dto.UpdateCustomerRequest;
 import com.servis.backend.entity.Customer;
@@ -23,6 +27,9 @@ public class CustomerService {
     @Autowired
     private DeviceRepository deviceRepository;
 
+    @Autowired
+    private AuditLogService auditLogService;
+
     public List<Customer> getAllCustomers() {
         return customerRepository.findAll();
     }
@@ -40,7 +47,17 @@ public class CustomerService {
 
         Customer customer = new Customer();
         applyFields(customer, request.getFullName(), phone, request.getWhatsappNumber(), email, request.getAddress());
-        return customerRepository.save(customer);
+        Customer saved = customerRepository.save(customer);
+        String display = saved.getFullName() != null ? saved.getFullName() : ("Müşteri#" + saved.getId());
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.CUSTOMER_CREATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.CUSTOMER, saved.getId(), display)
+                .description(display + " müşterisi oluşturuldu.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("customerId", saved.getId())
+                .meta("phone", saved.getPhone()));
+        return saved;
     }
 
     public Customer updateCustomer(Long id, UpdateCustomerRequest request) {
@@ -51,20 +68,35 @@ public class CustomerService {
         assertEmailAvailable(email, id);
 
         applyFields(existing, request.getFullName(), phone, request.getWhatsappNumber(), email, request.getAddress());
-        return customerRepository.save(existing);
+        Customer saved = customerRepository.save(existing);
+        String display = saved.getFullName() != null ? saved.getFullName() : ("Müşteri#" + saved.getId());
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.CUSTOMER_UPDATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.CUSTOMER, saved.getId(), display)
+                .description(display + " müşterisi güncellendi.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("customerId", saved.getId()));
+        return saved;
     }
 
     public void deleteCustomer(Long id) {
-        if (!customerRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Müşteri bulunamadı: " + id);
-        }
+        Customer existing = getCustomerById(id);
         if (deviceRepository.existsByCustomerId(id)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Bu müşteriye bağlı cihazlar bulunduğu için müşteri silinemez."
             );
         }
+        String display = existing.getFullName() != null ? existing.getFullName() : ("Müşteri#" + id);
         customerRepository.deleteById(id);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.CUSTOMER_DELETED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.CUSTOMER, id, display)
+                .description(display + " müşterisi silindi.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("customerId", id));
     }
 
     public Customer findByWhatsappNumber(String whatsappNumber) {

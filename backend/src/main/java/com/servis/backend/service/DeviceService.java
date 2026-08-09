@@ -1,5 +1,9 @@
 package com.servis.backend.service;
 
+import com.servis.backend.audit.AuditActions;
+import com.servis.backend.audit.AuditEntityTypes;
+import com.servis.backend.audit.AuditEvent;
+import com.servis.backend.audit.AuditSources;
 import com.servis.backend.entity.Customer;
 import com.servis.backend.entity.Device;
 import com.servis.backend.entity.DeviceModel;
@@ -32,6 +36,9 @@ public class DeviceService {
 
     @Autowired
     private WarrantyService warrantyService;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public List<Device> getAllDevices() {
         return deviceRepository.findAll();
@@ -69,6 +76,16 @@ public class DeviceService {
         toSave.setPurchaseDate(device.getPurchaseDate());
         toSave.setInstallationDate(device.getInstallationDate());
         Device saved = deviceRepository.save(toSave);
+        String display = deviceDisplay(saved);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.DEVICE_CREATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.DEVICE, saved.getId(), display)
+                .description(display + " cihazı oluşturuldu.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("deviceId", saved.getId())
+                .meta("serialNumber", saved.getSerialNumber())
+                .meta("customerId", customer.getId()));
 
         // Tarih + GENERAL ay tanımlıysa otomatik GENERAL kaydı (duplicate üretmez)
         warrantyService.tryCreateGeneralWarrantyIfPossible(saved.getId());
@@ -104,20 +121,37 @@ public class DeviceService {
         existing.setSerialNumber(serial);
         existing.setPurchaseDate(deviceDetails.getPurchaseDate());
         existing.setInstallationDate(deviceDetails.getInstallationDate());
-        return deviceRepository.save(existing);
+        Device saved = deviceRepository.save(existing);
+        String display = deviceDisplay(saved);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.DEVICE_UPDATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.DEVICE, saved.getId(), display)
+                .description(display + " cihazı güncellendi.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("deviceId", saved.getId())
+                .meta("serialNumber", saved.getSerialNumber()));
+        return saved;
     }
 
     public void deleteDevice(Long id) {
-        if (!deviceRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cihaz bulunamadı: " + id);
-        }
+        Device existing = getDeviceById(id);
         if (workOrderRepository.existsByDeviceId(id)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Bu cihaza bağlı iş emirleri bulunduğu için cihaz silinemez."
             );
         }
+        String display = deviceDisplay(existing);
         deviceRepository.deleteById(id);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.DEVICE_DELETED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.DEVICE, id, display)
+                .description(display + " cihazı silindi.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("deviceId", id)
+                .meta("serialNumber", existing.getSerialNumber()));
     }
 
     private static Long requireAssociationId(Object association, String message) {
@@ -144,5 +178,15 @@ public class DeviceService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seri numarası zorunludur");
         }
         return serialNumber.trim();
+    }
+
+    private static String deviceDisplay(Device device) {
+        if (device == null) {
+            return "Cihaz";
+        }
+        if (device.getSerialNumber() != null && !device.getSerialNumber().isBlank()) {
+            return device.getSerialNumber();
+        }
+        return device.getId() != null ? "Cihaz#" + device.getId() : "Cihaz";
     }
 }

@@ -4,6 +4,10 @@ import com.servis.backend.dto.BotInteractionRequest;
 import com.servis.backend.dto.WhatsAppNotificationRequest;
 import com.servis.backend.entity.NotificationDedup;
 import com.servis.backend.entity.WhatsAppOutbox;
+import com.servis.backend.audit.AuditActions;
+import com.servis.backend.audit.AuditEntityTypes;
+import com.servis.backend.audit.AuditEvent;
+import com.servis.backend.audit.AuditSources;
 import com.servis.backend.repository.NotificationDedupRepository;
 import com.servis.backend.security.BotApiKeyGuard;
 import com.servis.backend.util.PhoneNormalizer;
@@ -46,6 +50,9 @@ public class WhatsAppNotificationClient {
 
     @Autowired
     private WorkOrderNotificationTracker workOrderNotificationTracker;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     @Value("${whatsapp.bot.url:}")
     private String botBaseUrl;
@@ -102,11 +109,13 @@ public class WhatsAppNotificationClient {
         if (result.success) {
             logOutbound(request, phone, "SENT", null);
             recordCustomerTracker(request, "SENT", result.messageId);
+            auditWhatsAppResult(request, phone, true, null, AuditSources.SYSTEM);
             return;
         }
 
         logOutbound(request, phone, "FAILED", result.error);
         recordCustomerTracker(request, "FAILED", null);
+        auditWhatsAppResult(request, phone, false, result.error, AuditSources.SYSTEM);
         if (request.getWorkOrderId() != null && request.getEventType() != null) {
             boolean queued = whatsAppOutboxService.enqueueIfAbsent(request, phone, result.error);
             if (queued) {
@@ -129,11 +138,45 @@ public class WhatsAppNotificationClient {
         if (result.success) {
             logOutbound(request, phone, "SENT", null);
             recordCustomerTracker(request, "SENT", result.messageId);
+            auditWhatsAppResult(request, phone, true, null, AuditSources.SYSTEM);
             return true;
         }
         logOutbound(request, phone, "FAILED", result.error);
         recordCustomerTracker(request, "FAILED", null);
+        auditWhatsAppResult(request, phone, false, result.error, AuditSources.SYSTEM);
         return false;
+    }
+
+    private void auditWhatsAppResult(
+            WhatsAppNotificationRequest request,
+            String phone,
+            boolean success,
+            String error,
+            String source) {
+        if (request == null) {
+            return;
+        }
+        // Kritik bildirimler: iş emri bağlamı olan veya tanımlı eventType
+        if (request.getWorkOrderId() == null && (request.getEventType() == null || request.getEventType().isBlank())) {
+            return;
+        }
+        String eventType = request.getEventType() != null ? request.getEventType() : "NOTIFICATION";
+        String display = request.getWorkOrderId() != null
+                ? ("WO#" + request.getWorkOrderId() + " / " + eventType)
+                : eventType;
+        String action = success ? AuditActions.WHATSAPP_SENT : AuditActions.WHATSAPP_FAILED;
+        String desc = success
+                ? (eventType + " WhatsApp bildirimi gönderildi.")
+                : (eventType + " WhatsApp bildirimi başarısız.");
+        auditLogService.safeRecord(AuditEvent.of(action)
+                .entity(AuditEntityTypes.WHATSAPP, request.getWorkOrderId(), display)
+                .description(desc)
+                .source(source != null ? source : AuditSources.SYSTEM)
+                .success(success)
+                .meta("workOrderId", request.getWorkOrderId())
+                .meta("eventType", eventType)
+                .meta("phoneMasked", maskPhone(phone))
+                .meta("error", error));
     }
 
     /**

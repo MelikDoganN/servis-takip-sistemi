@@ -5,6 +5,10 @@ import com.servis.backend.entity.Region;
 import com.servis.backend.entity.Role;
 import com.servis.backend.entity.Technician;
 import com.servis.backend.entity.User;
+import com.servis.backend.audit.AuditActions;
+import com.servis.backend.audit.AuditEntityTypes;
+import com.servis.backend.audit.AuditEvent;
+import com.servis.backend.audit.AuditSources;
 import com.servis.backend.repository.RegionRepository;
 import com.servis.backend.repository.RoleRepository;
 import com.servis.backend.repository.TechnicianRepository;
@@ -38,6 +42,9 @@ public class TechnicianService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public List<Technician> getAllTechnicians() {
         return technicianRepository.findAll();
@@ -127,7 +134,18 @@ public class TechnicianService {
                 request.getIsAvailable() != null ? request.getIsAvailable() : true
         );
 
-        return technicianRepository.save(technician);
+        Technician saved = technicianRepository.save(technician);
+        String display = technicianDisplay(saved);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.TECHNICIAN_CREATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.TECHNICIAN, saved.getId(), display)
+                .description(display + " teknisyeni oluşturuldu.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("technicianId", saved.getId())
+                .meta("email", savedUser.getEmail())
+                .meta("regionId", region.getId()));
+        return saved;
     }
 
     public Technician updateTechnician(Long id, Technician technicianDetails) {
@@ -142,11 +160,34 @@ public class TechnicianService {
         existing.setWhatsappNumber(technicianDetails.getWhatsappNumber());
         existing.setCurrentWorkload(technicianDetails.getCurrentWorkload());
         existing.setIsAvailable(technicianDetails.getIsAvailable());
-        return technicianRepository.save(existing);
+        Technician saved = technicianRepository.save(existing);
+        String display = technicianDisplay(saved);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.TECHNICIAN_UPDATED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.TECHNICIAN, saved.getId(), display)
+                .description(display + " teknisyeni güncellendi.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("technicianId", saved.getId()));
+        return saved;
     }
 
     public void deleteTechnician(Long id) {
+        Technician existing = null;
+        try {
+            existing = getTechnicianById(id);
+        } catch (RuntimeException ignored) {
+            // silmeden önce display için
+        }
+        String display = existing != null ? technicianDisplay(existing) : ("Teknisyen#" + id);
         technicianRepository.deleteById(id);
+        auditLogService.safeRecord(AuditEvent.of(AuditActions.TECHNICIAN_DELETED)
+                .actor(auditLogService.currentUserOrNull())
+                .entity(AuditEntityTypes.TECHNICIAN, id, display)
+                .description(display + " teknisyeni silindi.")
+                .source(AuditSources.WEB)
+                .success(true)
+                .meta("technicianId", id));
     }
 
     public List<Technician> getAvailableTechniciansWithMaxWorkload(Integer maxWorkload) {
@@ -179,5 +220,16 @@ public class TechnicianService {
             return null;
         }
         return value.trim();
+    }
+
+    private static String technicianDisplay(Technician technician) {
+        if (technician == null) {
+            return "Teknisyen";
+        }
+        if (technician.getUser() != null && technician.getUser().getFullName() != null
+                && !technician.getUser().getFullName().isBlank()) {
+            return technician.getUser().getFullName();
+        }
+        return technician.getId() != null ? "Teknisyen#" + technician.getId() : "Teknisyen";
     }
 }
