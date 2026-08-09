@@ -10,6 +10,7 @@ import {
   Wrench,
   Bell,
   MessageSquare,
+  History,
 } from "lucide-react";
 
 export interface NavItem {
@@ -95,5 +96,12 @@ export const navItems: NavItem[] = [
     description: "Bot etkileşim logları",
     roles: ["ROLE_ADMIN"],
     icon: <MessageSquare className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
+  },
+  {
+    label: "Hareket Geçmişi",
+    href: "/hareket-gecmisi",
+    description: "Sistem denetim kayıtları",
+    roles: ["ROLE_ADMIN"],
+    icon: <History className="h-5 w-5 shrink-0" strokeWidth={1.75} />,
   },
 ];

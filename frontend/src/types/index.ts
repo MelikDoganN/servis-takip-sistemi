@@ -1,4 +1,5 @@
 export * from "./api";
+export * from "./auditLog";
 export * from "./auth";
 export * from "./brand";
 export * from "./customer";
