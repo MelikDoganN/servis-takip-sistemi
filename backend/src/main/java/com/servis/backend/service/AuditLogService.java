@@ -10,6 +10,7 @@ import com.servis.backend.dto.AuditLogDto;
 import com.servis.backend.entity.AuditLog;
 import com.servis.backend.entity.User;
 import com.servis.backend.repository.AuditLogRepository;
+import com.servis.backend.repository.AuditLogSpecifications;
 import com.servis.backend.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,16 +144,17 @@ public class AuditLogService {
             LocalDateTime dateTo,
             String search,
             Pageable pageable) {
-        String searchTerm = (search == null || search.isBlank()) ? null : search.trim();
-        return auditLogRepository.search(
-                blankToNull(action),
-                blankToNull(entityType),
-                actorUserId,
-                blankToNull(source),
-                success,
-                dateFrom,
-                dateTo,
-                searchTerm,
+        return auditLogRepository.findAll(
+                AuditLogSpecifications.filtering(
+                        blankToNull(action),
+                        blankToNull(entityType),
+                        actorUserId,
+                        blankToNull(source),
+                        success,
+                        dateFrom,
+                        dateTo,
+                        blankToNull(search)
+                ),
                 pageable
         ).map(this::toDto);
     }
