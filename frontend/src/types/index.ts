@@ -6,6 +6,7 @@ export * from "./customer";
 export * from "./dashboard";
 export * from "./device";
 export * from "./deviceModel";
+export * from "./product";
 export * from "./region";
 export * from "./role";
 export * from "./technician";

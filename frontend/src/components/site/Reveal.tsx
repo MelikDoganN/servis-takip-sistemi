@@ -9,7 +9,6 @@ interface RevealProps {
   delayMs?: number;
 }
 
-/** Scroll reveal — prefers-reduced-motion ile animasyon kapalı. */
 export function Reveal({ children, className, delayMs = 0 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -17,7 +16,6 @@ export function Reveal({ children, className, delayMs = 0 }: RevealProps) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-
     const reduced =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -25,7 +23,6 @@ export function Reveal({ children, className, delayMs = 0 }: RevealProps) {
       setVisible(true);
       return;
     }
-
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -42,11 +39,7 @@ export function Reveal({ children, className, delayMs = 0 }: RevealProps) {
   return (
     <div
       ref={ref}
-      className={cn(
-        "landing-reveal",
-        visible && "landing-reveal-visible",
-        className
-      )}
+      className={cn("landing-reveal", visible && "landing-reveal-visible", className)}
       style={delayMs ? { transitionDelay: `${delayMs}ms` } : undefined}
     >
       {children}

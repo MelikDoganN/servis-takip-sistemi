@@ -4,10 +4,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Servis Takip Sistemi",
+    default: "Servis Takip | Teknoloji Ürünleri ve Teknik Servis",
     template: "%s",
   },
-  description: "Servis Takip, İş Takip ve Garanti Yönetim Sistemi",
+  description:
+    "Teknoloji ürünleri, teknik servis, garanti ve servis takip işlemleri.",
 };
 
 export default function RootLayout({
