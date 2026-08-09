@@ -39,6 +39,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/**").permitAll()
+                // Public ürün kataloğu (yalnız active, public-safe alanlar)
+                .requestMatchers("/api/public/**").permitAll()
                 // WhatsApp bot lookup + bot write hooks (API key ile korunur)
                 .requestMatchers("/api/customers/by-whatsapp/**").permitAll()
                 .requestMatchers("/api/technicians/by-whatsapp/**").permitAll()

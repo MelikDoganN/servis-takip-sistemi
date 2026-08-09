@@ -1,0 +1,46 @@
+package com.servis.backend.controller;
+
+import com.servis.backend.dto.ProductCategoryDto;
+import com.servis.backend.dto.ProductDto;
+import com.servis.backend.service.ProductCatalogService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * Kimlik doğrulamasız public katalog — yalnız active ürünler, public-safe alanlar.
+ */
+@RestController
+@RequestMapping("/api/public")
+public class PublicCatalogController {
+
+    @Autowired
+    private ProductCatalogService productCatalogService;
+
+    @GetMapping("/products")
+    public Page<ProductDto> listProducts(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        return productCatalogService.listPublic(category, brand, search, page, size);
+    }
+
+    @GetMapping("/products/featured")
+    public List<ProductDto> featuredProducts() {
+        return productCatalogService.listFeaturedPublic();
+    }
+
+    @GetMapping("/products/{slug}")
+    public ProductDto getBySlug(@PathVariable String slug) {
+        return productCatalogService.getPublicBySlug(slug);
+    }
+
+    @GetMapping("/categories")
+    public List<ProductCategoryDto> categories() {
+        return productCatalogService.listPublicCategories();
+    }
+}
