@@ -160,7 +160,7 @@ export function WorkOrderPdfModal({
       const url = createWorkOrderDetailPdfBlobUrl(pdfData);
       setPreviewUrl(url);
     } catch {
-      toast.error("PDF önizleme oluşturulamadı");
+      toast.error("PDF oluşturulamadı.");
     }
   };
 
@@ -169,11 +169,14 @@ export function WorkOrderPdfModal({
     try {
       downloadWorkOrderDetailPdf(
         pdfData,
-        `servis_${workOrder.serviceNumber || workOrder.id}.pdf`
+        `Servis-${workOrder.serviceNumber || workOrder.id}.pdf`.replace(
+          /\s+/g,
+          "-"
+        )
       );
       toast.success("PDF indirildi");
     } catch {
-      toast.error("PDF indirilemedi");
+      toast.error("PDF oluşturulamadı.");
     }
   };
 

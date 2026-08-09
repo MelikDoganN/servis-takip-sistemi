@@ -51,7 +51,7 @@ import {
 import { Technician } from "@/types/technician";
 import { formatDateTime } from "@/lib/utils";
 import { useToast } from "@/components/ui/Toast";
-import { generateWorkOrderReportPdf } from "@/lib/pdfExport";
+import { generateWorkOrderReportPdf, generateTechnicianPerformancePdf } from "@/lib/pdfExport";
 import { WorkOrderPdfModal } from "@/components/workorders/WorkOrderPdfModal";
 
 const STATUS_BAR_COLORS: Record<WorkOrderStatus, string> = {
@@ -236,7 +236,10 @@ export default function RaporlarPage() {
   );
 
   const handleDownloadPdf = () => {
-    if (!report) return;
+    if (!report) {
+      toast.error("PDF oluşturulamadı.");
+      return;
+    }
     try {
       generateWorkOrderReportPdf({
         report,
@@ -247,6 +250,7 @@ export default function RaporlarPage() {
           value: s.value,
         })),
         workOrders: filteredWorkOrders.map((wo) => ({
+          serviceNumber: wo.serviceNumber || "-",
           customer: wo.customer?.fullName || "-",
           device: wo.device?.serialNumber || "-",
           technician: wo.technician?.user?.fullName || "-",
@@ -256,15 +260,46 @@ export default function RaporlarPage() {
         })),
         technicianPerformance: technicianPerformance.map((t) => ({
           name: t.name,
+          region: t.region,
           total: t.total,
           open: t.open,
           resolved: t.resolved,
           completionRate: t.completionRate,
+          currentWorkload: t.currentWorkload,
+          isAvailable: t.isAvailable,
         })),
       });
       toast.success("PDF raporu indirildi");
-    } catch {
-      toast.error("PDF oluşturulamadı");
+    } catch (err) {
+      console.error("PDF olusturma hatasi:", err);
+      toast.error("PDF oluşturulamadı.");
+    }
+  };
+
+  const handleDownloadTechnicianPdf = () => {
+    if (technicianPerformance.length === 0) {
+      toast.error("PDF oluşturulamadı.");
+      return;
+    }
+    try {
+      generateTechnicianPerformancePdf({
+        rows: technicianPerformance.map((t) => ({
+          name: t.name,
+          region: t.region,
+          total: t.total,
+          open: t.open,
+          resolved: t.resolved,
+          completionRate: t.completionRate,
+          currentWorkload: t.currentWorkload,
+          isAvailable: t.isAvailable,
+        })),
+        startDate,
+        endDate,
+      });
+      toast.success("Teknisyen performans PDF indirildi");
+    } catch (err) {
+      console.error("Teknisyen PDF hatasi:", err);
+      toast.error("PDF oluşturulamadı.");
     }
   };
 
@@ -321,7 +356,16 @@ export default function RaporlarPage() {
               disabled={!report || reportLoading}
             >
               <FileDown className="mr-1.5 h-4 w-4" />
-              PDF İndir
+              İş Emri PDF
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleDownloadTechnicianPdf}
+              disabled={detailLoading || technicianPerformance.length === 0}
+            >
+              <FileDown className="mr-1.5 h-4 w-4" />
+              Teknisyen PDF
             </Button>
           </div>
         }
@@ -451,6 +495,17 @@ export default function RaporlarPage() {
         title="İş Emri Detay Raporu"
         description="Satıra tıklayarak iş emri detayını görüntüleyin ve PDF indirin"
         noPadding
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDownloadPdf}
+            disabled={!report || reportLoading}
+          >
+            <FileDown className="mr-1.5 h-4 w-4" />
+            PDF İndir
+          </Button>
+        }
       >
         {detailLoading ? (
           <SkeletonTable rows={6} />
@@ -523,6 +578,17 @@ export default function RaporlarPage() {
         title="Teknisyen Performansı"
         description="Tarih aralığındaki iş yüküne göre teknisyen karşılaştırması"
         noPadding
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDownloadTechnicianPdf}
+            disabled={detailLoading || technicianPerformance.length === 0}
+          >
+            <FileDown className="mr-1.5 h-4 w-4" />
+            PDF İndir
+          </Button>
+        }
       >
         {detailLoading ? (
           <SkeletonTable rows={5} />
