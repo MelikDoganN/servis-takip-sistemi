@@ -3,7 +3,10 @@ import { Providers } from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Servis Takip Sistemi",
+  title: {
+    default: "Servis Takip Sistemi",
+    template: "%s",
+  },
   description: "Servis Takip, İş Takip ve Garanti Yönetim Sistemi",
 };
 

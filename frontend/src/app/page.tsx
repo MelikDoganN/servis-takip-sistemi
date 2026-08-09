@@ -1,25 +1,26 @@
-"use client";
+import type { Metadata } from "next";
+import { LandingPage } from "@/components/landing/LandingPage";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { getDefaultHomePath, isAuthenticated } from "@/lib/auth";
-import { navItems } from "@/config/navigation";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+export const metadata: Metadata = {
+  title: "Servis Takip Sistemi | Akıllı Servis Yönetim Platformu",
+  description:
+    "İş emirleri, müşteriler, cihazlar, teknisyenler, garanti ve WhatsApp bildirimlerini tek panelden yönetin.",
+  openGraph: {
+    title: "Servis Takip Sistemi | Akıllı Servis Yönetim Platformu",
+    description:
+      "İş emirleri, müşteriler, cihazlar, teknisyenler, garanti ve WhatsApp bildirimlerini tek panelden yönetin.",
+    type: "website",
+    locale: "tr_TR",
+    siteName: "Servis Takip Sistemi",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Servis Takip Sistemi | Akıllı Servis Yönetim Platformu",
+    description:
+      "İş emirleri, müşteriler, cihazlar, teknisyenler, garanti ve WhatsApp bildirimlerini tek panelden yönetin.",
+  },
+};
 
 export default function HomePage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace("/login");
-      return;
-    }
-    router.replace(getDefaultHomePath(navItems));
-  }, [router]);
-
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <LoadingSpinner size="lg" />
-    </div>
-  );
+  return <LandingPage />;
 }
